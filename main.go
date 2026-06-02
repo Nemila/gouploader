@@ -109,9 +109,9 @@ func processFiles(orm *Orm) error {
 
 		for hostName, adapter := range adapters.Adpaters {
 			var uploadExists *sqlc.UploadJob
-			for _, u := range uploads {
-				if u.HostName == hostName {
-					uploadExists = &u
+			for i := range uploads {
+				if uploads[i].HostName == hostName {
+					uploadExists = &uploads[i] // 100% safe reference directly into the slice
 					break
 				}
 			}
