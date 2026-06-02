@@ -209,7 +209,7 @@ func importToWebsite(filePath, hostName, slug string) error {
 	baseUrl := "https://dessinanime.cc/api/import"
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 2 * time.Minute,
+		Timeout: 30 * time.Minute,
 	}
 
 	parsedUrl, err := url.Parse(baseUrl)

@@ -102,7 +102,7 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 2 * time.Minute,
+		Timeout: 30 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
@@ -146,7 +146,7 @@ func (u *Uqload) getUploadServer() (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 2 * time.Minute,
+		Timeout: 30 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
