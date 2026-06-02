@@ -184,3 +184,7 @@ func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slug
 	}
 	return nil
 }
+
+type importResponse struct {
+	Message string `json:"message"`
+}

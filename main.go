@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -119,6 +123,7 @@ func processFiles(orm *Orm) error {
 				}
 				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
 				_ = orm.AddUpload(file.ID, UploadDone, hostName, slug, "")
+				_ = importToWebsite(file.FilePath, hostName, slug)
 				continue
 			}
 
@@ -137,6 +142,7 @@ func processFiles(orm *Orm) error {
 				}
 				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
 				_ = orm.CompleteUpload(file.ID, slug)
+				_ = importToWebsite(file.FilePath, hostName, slug)
 				continue
 			}
 		}
@@ -147,6 +153,54 @@ func processFiles(orm *Orm) error {
 		} else {
 			_ = orm.UpdateFileStatus(file.ID, FilePending)
 		}
+	}
+
+	return nil
+}
+
+func importToWebsite(filePath, hostName, slug string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("[addToWebsite] failed to open file: %w", err)
+	}
+	defer file.Close()
+	fileName := filepath.Base(file.Name())
+
+	baseUrl := "https://dessinanime.cc/api/import"
+	ctx := context.Background()
+	client := &http.Client{
+		Timeout: 2 * time.Minute,
+	}
+
+	parsedUrl, err := url.Parse(baseUrl)
+	if err != nil {
+		return fmt.Errorf("[addToWebsite] failed to parse url: %w", err)
+	}
+
+	params := url.Values{}
+	params.Add("fileName", fileName)
+	params.Add("hostName", hostName)
+	params.Add("slug", slug)
+
+	parsedUrl.RawQuery = params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedUrl.String(), nil)
+	if err != nil {
+		return fmt.Errorf("[addToWebsite] failed to create request: %w", err)
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("[addToWebsite] faied to execute request: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusOK {
+		var importRes importResponse
+		if err := json.NewDecoder(res.Body).Decode(&importRes); err != nil {
+			return fmt.Errorf("[addToWebsite] faied to decode json: %w", err)
+		}
+		fmt.Println(importRes.Message)
 	}
 
 	return nil
