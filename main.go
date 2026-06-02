@@ -4,16 +4,15 @@ import (
 	_ "embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"gouploader/adapters"
 	"gouploader/sqlc"
 
-	// "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 )
-
-var mediaPath = "/home/nemila/Videos"
 
 func displayMenu() {
 	fmt.Println("\nWHAT WOULD YOU LIKE TO DO ?")
@@ -26,6 +25,11 @@ func displayMenu() {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	var choice int = 1
 
 	for choice != 0 {
@@ -43,7 +47,7 @@ func main() {
 				panic(err.Error())
 			}
 		case 2:
-			files, err := getDirFiles(mediaPath)
+			files, err := getDirFiles(os.Getenv("MEDIA_PATH"))
 			if err != nil {
 				panic(err.Error())
 			}

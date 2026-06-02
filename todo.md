@@ -1,7 +1,0 @@
-- [x] Scan given folder and register all files
-- [] File Processing
-  - [] Get all pending files form the database
-  - [] For each file check if exists (if exists continue, else change file status to missing)
-  - [] Get file uploads and avaialable hosts
-  - [] If host not in file upload, trigger upload and create file upload
-  - [] If host in file upload and status is not success, retry and increment file upload retry counter
