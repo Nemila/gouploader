@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"slices"
 
 	"gouploader/adapters"
 	"gouploader/sqlc"
@@ -23,6 +22,7 @@ func displayMenu() {
 	fmt.Println("2 - REGISTER FILES")
 	fmt.Println("3 - DISPLAY PENDING FILES")
 	fmt.Println("4 - UPLOAD FILE TO ABYSS")
+	fmt.Println("5 - PROCESS FILES")
 }
 
 func main() {
@@ -39,7 +39,9 @@ func main() {
 
 		switch choice {
 		case 1:
-			orm.Migrate()
+			if err := orm.Migrate(); err != nil {
+				panic(err.Error())
+			}
 		case 2:
 			files, err := getDirFiles(mediaPath)
 			if err != nil {
@@ -58,8 +60,11 @@ func main() {
 			}
 			fmt.Println(pendingFiles)
 		case 4:
-			_, err := adapters.Adpaters["vidhide"].Upload("/home/nemila/Videos/go_http_tutorial.mp4")
-			if err != nil {
+			if _, err := adapters.Adpaters["vidhide"].Upload("/home/nemila/Videos/go_http_tutorial.mp4"); err != nil {
+				panic(err.Error())
+			}
+		case 5:
+			if err := processFiles(orm); err != nil {
 				panic(err.Error())
 			}
 		}
@@ -91,41 +96,51 @@ func processFiles(orm *Orm) error {
 	}
 
 	for _, file := range files {
-		err := orm.UpdateFileStatus(PROCESSING, "", file.ID)
-		if err != nil {
-			orm.UpdateFileStatus(PENDING, err.Error(), file.ID)
-			continue
-		}
+		_ = orm.UpdateFileStatus(file.ID, FileProcessing, "")
 
 		uploads, err := orm.GetFileUploads(file.ID)
 		if err != nil {
-			orm.UpdateFileStatus(PENDING, err.Error(), file.ID)
+			orm.UpdateFileStatus(file.ID, FilePending, err.Error())
 			continue
 		}
 
 		for hostName, adapter := range adapters.Adpaters {
-			uploadExists := slices.ContainsFunc(uploads, func(u sqlc.UploadJob) bool {
+			var uploadExists *sqlc.UploadJob
+			for _, u := range uploads {
 				if u.HostName == hostName {
-					return true
+					uploadExists = &u
+					break
 				}
-				return false
-			})
-
-			if !uploadExists {
-				// TODO: UPLOAD
-				_, err := adapter.Upload(file.FilePath)
-				if err != nil {
-					// TODO: UPDATE UPLOAD STATUS AND ADD ERROR MESSAGE
-					continue
-				}
-				// TODO: CREATE UPLOAD
-
 			}
 
-			// IF SUCCESS SKIP
-			// IF FAILED RETRY
+			if uploadExists.Status == "DONE" {
+				continue
+			}
+
+			if uploadExists.Status == "FAILED" {
+				slugId, err := adapter.Upload(file.FilePath)
+				if err != nil {
+					_ = orm.UpdateFileStatus(file.ID, FilePending, "")
+					_ = orm.FailUpload(file.ID, err.Error())
+					continue
+				}
+				_ = orm.CompleteUpload(file.ID, slugId)
+				continue
+			}
+
+			if uploadExists == nil {
+				slugId, err := adapter.Upload(file.FilePath)
+				if err != nil {
+					_ = orm.UpdateFileStatus(file.ID, FilePending, "")
+					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
+					continue
+				}
+				_ = orm.AddUpload(file.ID, UploadDone, hostName, slugId, "")
+				continue
+			}
 
 		}
+
 	}
 
 	return nil

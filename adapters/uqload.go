@@ -138,7 +138,6 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 		return "", fmt.Errorf("[uqload.Upload] upload succeeded but server returned no file data")
 	}
 
-	fmt.Println(uploadRes)
 	return uploadRes.Files[0].Filecode, nil
 }
 

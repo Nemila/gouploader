@@ -13,7 +13,7 @@ type File struct {
 	ID           int64
 	FilePath     string
 	DiscoveredAt time.Time
-	Status       sql.NullString
+	Status       string
 	Error        sql.NullString
 }
 
@@ -21,9 +21,8 @@ type UploadJob struct {
 	ID         int64
 	FileID     int64
 	HostName   string
-	Status     sql.NullString
+	Status     string
 	RetryCount sql.NullInt64
 	LastError  sql.NullString
-	EmbedID    sql.NullString
-	UpdatedAt  sql.NullTime
+	SlugID     sql.NullString
 }

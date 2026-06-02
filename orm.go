@@ -21,10 +21,18 @@ var schema string
 type FileStatus int
 
 const (
-	PENDING FileStatus = iota
-	PROCESSING
-	MISSING
-	DONE
+	FilePending FileStatus = iota
+	FileProcessing
+	FileMissing
+	FileDone
+)
+
+type UploadStatus int
+
+const (
+	UploadPending UploadStatus = iota
+	UploadFailed
+	UploadDone
 )
 
 func NewOrm() (*Orm, error) {
@@ -101,15 +109,64 @@ func (orm *Orm) RegisterFile(path string) error {
 	return nil
 }
 
-func (orm *Orm) UpdateFileStatus(status FileStatus, errorMsg string, fileId int64) error {
+func (orm *Orm) UpdateFileStatus(fileId int64, status FileStatus, errorMsg string) error {
 	statuses := [...]string{"PENDING", "PROCESSING", "MISSING", "DONE"}
+	if status < FilePending || status > FileDone {
+		return fmt.Errorf("[orm.UpdateFileStatus] invalid status")
+	}
+
 	err := orm.queries.UpdateFileStatus(orm.ctx, sqlc.UpdateFileStatusParams{
-		Status: sql.NullString{String: statuses[status], Valid: status >= PENDING || status <= DONE},
-		Error:  sql.NullString{String: errorMsg, Valid: errorMsg != ""},
 		ID:     fileId,
+		Status: statuses[status],
+		Error:  sql.NullString{String: errorMsg, Valid: errorMsg != ""},
 	})
 	if err != nil {
 		return fmt.Errorf("[orm.UpdateFileStatus] query failed: %w", err)
+	}
+
+	return nil
+}
+
+func (orm *Orm) FailUpload(fileId int64, errorMsg string) error {
+	err := orm.queries.FailUpload(orm.ctx, sqlc.FailUploadParams{
+		ID:        fileId,
+		LastError: sql.NullString{String: errorMsg, Valid: errorMsg != ""},
+	})
+	if err != nil {
+		return fmt.Errorf("[orm.FailUpload] query failed: %w", err)
+	}
+	return nil
+}
+
+func (orm *Orm) CompleteUpload(fileId int64, slugId string) error {
+	err := orm.queries.CompleteUpload(orm.ctx, sqlc.CompleteUploadParams{
+		ID: fileId,
+		SlugID: sql.NullString{
+			String: slugId,
+			Valid:  slugId != "",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("[orm.CompleteUpload] query failed: %w", err)
+	}
+	return nil
+}
+
+func (orm *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slugId string, errorMsg string) error {
+	statuses := [...]string{"PENDING", "FAILED", "DONE"}
+	if status < UploadPending || status > UploadDone {
+		return fmt.Errorf("[orm.AddUpload] invalid status")
+	}
+
+	err := orm.queries.AddUpload(orm.ctx, sqlc.AddUploadParams{
+		Status:    statuses[status],
+		FileID:    fileId,
+		HostName:  hostName,
+		SlugID:    sql.NullString{String: slugId, Valid: slugId != ""},
+		LastError: sql.NullString{String: errorMsg, Valid: errorMsg != ""},
+	})
+	if err != nil {
+		return fmt.Errorf("[orm.AddUpload] query failed: %w", err)
 	}
 	return nil
 }

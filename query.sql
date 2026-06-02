@@ -5,11 +5,21 @@ ORDER BY id LIMIT ? OFFSET ?;
 -- name: AddFile :exec
 INSERT INTO files (file_path) VALUES (?);
 
+-- name: AddUpload :exec
+INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug_id) VALUES (?, ?, ?, ?, ?);
+
 -- name: FindFileByPath :one
 SELECT * FROM files WHERE file_path=? LIMIT 1;
 
 -- name: GetFileUploads :many
-SELECT * FROM upload_jobs WHERE file_id=? ORDER BY updated_at DESC; 
+SELECT * FROM upload_jobs WHERE file_id=?; 
 
 -- name: UpdateFileStatus :exec
 UPDATE files SET status = ?, error = ? WHERE id = ?;
+
+-- name: FailUpload :exec
+UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?;
+
+-- name: CompleteUpload :exec
+UPDATE upload_jobs SET status = "DONE", slug_id = ? WHERE id = ?;
+

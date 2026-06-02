@@ -19,6 +19,57 @@ func (q *Queries) AddFile(ctx context.Context, filePath string) error {
 	return err
 }
 
+const addUpload = `-- name: AddUpload :exec
+INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug_id) VALUES (?, ?, ?, ?, ?)
+`
+
+type AddUploadParams struct {
+	FileID    int64
+	HostName  string
+	Status    string
+	LastError sql.NullString
+	SlugID    sql.NullString
+}
+
+func (q *Queries) AddUpload(ctx context.Context, arg AddUploadParams) error {
+	_, err := q.db.ExecContext(ctx, addUpload,
+		arg.FileID,
+		arg.HostName,
+		arg.Status,
+		arg.LastError,
+		arg.SlugID,
+	)
+	return err
+}
+
+const completeUpload = `-- name: CompleteUpload :exec
+UPDATE upload_jobs SET status = "DONE", slug_id = ? WHERE id = ?
+`
+
+type CompleteUploadParams struct {
+	SlugID sql.NullString
+	ID     int64
+}
+
+func (q *Queries) CompleteUpload(ctx context.Context, arg CompleteUploadParams) error {
+	_, err := q.db.ExecContext(ctx, completeUpload, arg.SlugID, arg.ID)
+	return err
+}
+
+const failUpload = `-- name: FailUpload :exec
+UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?
+`
+
+type FailUploadParams struct {
+	LastError sql.NullString
+	ID        int64
+}
+
+func (q *Queries) FailUpload(ctx context.Context, arg FailUploadParams) error {
+	_, err := q.db.ExecContext(ctx, failUpload, arg.LastError, arg.ID)
+	return err
+}
+
 const findFileByPath = `-- name: FindFileByPath :one
 SELECT id, file_path, discovered_at, status, error FROM files WHERE file_path=? LIMIT 1
 `
@@ -37,7 +88,7 @@ func (q *Queries) FindFileByPath(ctx context.Context, filePath string) (File, er
 }
 
 const getFileUploads = `-- name: GetFileUploads :many
-SELECT id, file_id, host_name, status, retry_count, last_error, embed_id, updated_at FROM upload_jobs WHERE file_id=? ORDER BY updated_at DESC
+SELECT id, file_id, host_name, status, retry_count, last_error, slug_id FROM upload_jobs WHERE file_id=?
 `
 
 func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob, error) {
@@ -56,8 +107,7 @@ func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob
 			&i.Status,
 			&i.RetryCount,
 			&i.LastError,
-			&i.EmbedID,
-			&i.UpdatedAt,
+			&i.SlugID,
 		); err != nil {
 			return nil, err
 		}
@@ -116,7 +166,7 @@ UPDATE files SET status = ?, error = ? WHERE id = ?
 `
 
 type UpdateFileStatusParams struct {
-	Status sql.NullString
+	Status string
 	Error  sql.NullString
 	ID     int64
 }
