@@ -10,21 +10,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
 type Uqload struct {
 	apiKey string
-}
-
-type uqloadUploadResponse struct {
-	Msg    string `json:"msg"`
-	Status int    `json:"status"`
-	Files  []struct {
-		Filecode string `json:"filecode"`
-		Filename string `json:"filename"`
-		Status   string `json:"status"`
-	} `json:"files"`
+	sessId string
 }
 
 type uqloadGetUploadServerResponse struct {
@@ -42,11 +34,13 @@ func (u *Uqload) getContentLength(filePath string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("[uqload.getContentLength] failed to open file: %w", err)
 	}
+
 	defer file.Close()
 
-	if err := writer.WriteField("key", u.apiKey); err != nil {
-		return 0, fmt.Errorf("[uqload.getContentLength] failed to write key: %w", err)
+	if err := writer.WriteField("sess_id", u.sessId); err != nil {
+		return 0, fmt.Errorf("[uqload.getContentLength] failed to write sess_id: %w", err)
 	}
+
 	_, err = writer.CreateFormFile("file", filepath.Base(file.Name()))
 	if err != nil {
 		return 0, fmt.Errorf("[uqload.getContentLength] failed to create form file: %w", err)
@@ -82,7 +76,7 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 		defer pw.Close()
 		defer writer.Close()
 
-		if err := writer.WriteField("key", u.apiKey); err != nil {
+		if err := writer.WriteField("sess_id", u.sessId); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
@@ -102,7 +96,7 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 5 * time.Minute,
+		Timeout: 60 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
@@ -126,19 +120,21 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("[uqload.Upload] server returned status %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("[vidhide.Upload] server returned status %d: %s", res.StatusCode, body)
 	}
 
-	var uploadRes uqloadUploadResponse
-	if err := json.NewDecoder(res.Body).Decode(&uploadRes); err != nil {
-		return "", err
+	uploadRes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("[vidhide.Upload] failed to read response: %w", err)
 	}
 
-	if len(uploadRes.Files) == 0 {
-		return "", fmt.Errorf("[uqload.Upload] upload succeeded but server returned no file data")
+	re := regexp.MustCompile(`name="fn">([^<]+)`)
+	matches := re.FindStringSubmatch(string(uploadRes))
+	if len(matches) < 1 {
+		return "", fmt.Errorf("[vidhide.Upload] failed to extract slug")
 	}
 
-	return uploadRes.Files[0].Filecode, nil
+	return matches[1], nil
 }
 
 func (u *Uqload) getUploadServer() (string, error) {
@@ -146,7 +142,7 @@ func (u *Uqload) getUploadServer() (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 5 * time.Minute,
+		Timeout: 60 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

@@ -50,7 +50,7 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 5 * time.Minute,
+		Timeout: 60 * time.Minute,
 	}
 
 	url := "http://up.hydrax.net/" + a.apiKey

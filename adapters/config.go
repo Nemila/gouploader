@@ -18,6 +18,7 @@ var Adpaters map[string]Adapter = map[string]Adapter{
 	},
 	"uqload": &Uqload{
 		apiKey: os.Getenv("UQLOAD_KEY"),
+		sessId: os.Getenv("UQLOAD_SESSID"),
 	},
 	"vidhide": &Vidhide{
 		apiKey: os.Getenv("VIDHIDE_KEY"),
