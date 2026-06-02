@@ -23,3 +23,5 @@ UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?;
 -- name: CompleteUpload :exec
 UPDATE upload_jobs SET status = "DONE", slug = ? WHERE id = ?;
 
+-- name: ResetProcessingStatuses :exec
+UPDATE files SET status = 'PENDING' WHERE status = 'PROCESSING';

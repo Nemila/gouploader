@@ -159,6 +159,15 @@ func (q *Queries) GetPendingFile(ctx context.Context, arg GetPendingFileParams) 
 	return items, nil
 }
 
+const resetProcessingStatuses = `-- name: ResetProcessingStatuses :exec
+UPDATE files SET status = 'PENDING' WHERE status = 'PROCESSING'
+`
+
+func (q *Queries) ResetProcessingStatuses(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetProcessingStatuses)
+	return err
+}
+
 const updateFileStatus = `-- name: UpdateFileStatus :exec
 UPDATE files SET status = ? WHERE id = ?
 `

@@ -185,6 +185,10 @@ func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slug
 	return nil
 }
 
-type importResponse struct {
-	Message string `json:"message"`
+func (o *Orm) ResetProcessingStatuses() error {
+	err := o.queries.ResetProcessingStatuses(o.ctx)
+	if err != nil {
+		return fmt.Errorf("[o.ResetProcessingStatuses] query failed: %w", err)
+	}
+	return nil
 }

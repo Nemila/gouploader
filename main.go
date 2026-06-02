@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"gouploader/adapters"
@@ -19,6 +21,10 @@ import (
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 )
+
+type importResponse struct {
+	Message string `json:"message"`
+}
 
 func folderExists(path string) bool {
 	info, err := os.Stat(path)
@@ -52,6 +58,21 @@ func main() {
 		return
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+		fmt.Println("\n🛑 Shutdown signal received! Cleaning up database states...")
+		err := orm.ResetProcessingStatuses()
+		if err != nil {
+			fmt.Printf("❌ Failed to reset statuses during shutdown: %v\n", err)
+		} else {
+			fmt.Println("✅ Active database states successfully reverted to Pending.")
+		}
+		os.Exit(0)
+	}()
+
 	for {
 		files, err := getDirFiles(mediaPath)
 		if err != nil {
@@ -64,9 +85,11 @@ func main() {
 			}
 		}
 
-		if err := processFiles(orm); err != nil {
+		if err := processFiles(ctx, orm); err != nil {
 			panic(err.Error())
 		}
+
+		fmt.Printf("\n[💤] Going to sleep for 5 minutes... (Next cycle at: %s)\n", time.Now().Add(time.Minute*5).Format("15:04:05"))
 		time.Sleep(time.Minute * 5)
 	}
 }
@@ -88,13 +111,17 @@ func getDirFiles(path string) ([]string, error) {
 	return files, nil
 }
 
-func processFiles(orm *Orm) error {
+func processFiles(ctx context.Context, orm *Orm) error {
 	files, err := orm.GetPendingFiles(1, 20)
 	if err != nil {
 		return fmt.Errorf("[processFiles] failed to get pending files: %w", err)
 	}
 
 	for _, file := range files {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		_ = orm.UpdateFileStatus(file.ID, FileProcessing)
 
 		uploads, err := orm.GetFileUploads(file.ID)
@@ -104,7 +131,17 @@ func processFiles(orm *Orm) error {
 
 		allHostsSuccessful := true
 
+		fmt.Println("\n──────────────────────────────────────────────────────────")
+		fmt.Printf("📦 PROCESSING FILE ID [%d]\n", file.ID)
+		fmt.Printf("📄 Path: %s\n", file.FilePath)
+		fmt.Println("──────────────────────────────────────────────────────────")
+
 		for hostName, adapter := range adapters.Adpaters {
+			if ctx.Err() != nil {
+				_ = orm.UpdateFileStatus(file.ID, FilePending)
+				return ctx.Err()
+			}
+
 			var uploadExists *sqlc.UploadJob
 			for i := range uploads {
 				if uploads[i].HostName == hostName {
@@ -114,33 +151,35 @@ func processFiles(orm *Orm) error {
 			}
 
 			if uploadExists == nil {
+				fmt.Printf("  ⚡ [%s] Initiating fresh upload...\n", hostName)
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
 					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
-					fmt.Printf("\nupload failed for host %s(%s): %s", hostName, file.FilePath, err.Error())
+					fmt.Printf("  ❌ [%s] Upload Failed: %s\n", hostName, err.Error())
 					continue
 				}
-				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
+				fmt.Printf("  ✨ [%s] Complete! -> Slug: %s\n", hostName, slug)
 				_ = orm.AddUpload(file.ID, UploadDone, hostName, slug, "")
 				_ = importToWebsite(file.FilePath, hostName, slug)
 				continue
 			}
 
 			if uploadExists.Status == "DONE" {
-				fmt.Printf("\nskipping file %s for host: %s", file.FilePath, hostName)
+				fmt.Printf("  ⏩ [%s] Already uploaded previously. Skipping.\n", hostName)
 				continue
 			}
 
 			if uploadExists.Status == "FAILED" {
+				fmt.Printf("  🔄 [%s] Found previous failure. Retrying upload...\n", hostName)
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
 					_ = orm.FailUpload(file.ID, err.Error())
-					fmt.Printf("\nupload failed for host %s(%s): %s", hostName, file.FilePath, err.Error())
+					fmt.Printf("  ❌ [%s] Retry Failed: %s\n", hostName, err.Error())
 					continue
 				}
-				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
+				fmt.Printf("  ✨ [%s] Retry Complete! -> Slug: %s\n", hostName, slug)
 				_ = orm.CompleteUpload(file.ID, slug)
 				_ = importToWebsite(file.FilePath, hostName, slug)
 				continue
@@ -149,9 +188,10 @@ func processFiles(orm *Orm) error {
 
 		if allHostsSuccessful {
 			_ = orm.UpdateFileStatus(file.ID, FileDone)
-			fmt.Printf("✅ Successfully processed file ID %d across all hosts\n", file.ID)
+			fmt.Printf("✔️  SUCCESS: File ID %d successfully handled across all hosts.\n", file.ID)
 		} else {
 			_ = orm.UpdateFileStatus(file.ID, FilePending)
+			fmt.Printf("⚠️  PARTIAL COMPLETION: Some uploads failed for File ID %d. Marked back to pending.\n", file.ID)
 		}
 	}
 
@@ -200,7 +240,7 @@ func importToWebsite(filePath, hostName, slug string) error {
 		if err := json.NewDecoder(res.Body).Decode(&importRes); err != nil {
 			return fmt.Errorf("[addToWebsite] faied to decode json: %w", err)
 		}
-		fmt.Println(importRes.Message)
+		fmt.Printf("  🌐 [API-Import] -> %s\n", importRes.Message)
 	}
 
 	return nil
