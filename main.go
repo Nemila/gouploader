@@ -17,11 +17,10 @@ import (
 func displayMenu() {
 	fmt.Println("\nWHAT WOULD YOU LIKE TO DO ?")
 	fmt.Println("0 - EXIT")
-	fmt.Println("1 - PUSH CHANGES TO DATABASE")
-	fmt.Println("2 - REGISTER FILES")
-	fmt.Println("3 - DISPLAY PENDING FILES")
-	fmt.Println("4 - UPLOAD FILE TO ABYSS")
-	fmt.Println("5 - PROCESS FILES")
+	fmt.Println("1 - REGISTER FILES")
+	fmt.Println("2 - DISPLAY PENDING FILES")
+	fmt.Println("3 - UPLOAD FILE TO ABYSS")
+	fmt.Println("4 - PROCESS FILES")
 }
 
 func main() {
@@ -41,12 +40,12 @@ func main() {
 			panic(err.Error())
 		}
 
+		if err := orm.InitDatabase(); err != nil {
+			panic(err.Error())
+		}
+
 		switch choice {
 		case 1:
-			if err := orm.Migrate(); err != nil {
-				panic(err.Error())
-			}
-		case 2:
 			files, err := getDirFiles(os.Getenv("MEDIA_PATH"))
 			if err != nil {
 				panic(err.Error())
@@ -57,17 +56,17 @@ func main() {
 					panic(err.Error())
 				}
 			}
-		case 3:
+		case 2:
 			pendingFiles, err := orm.GetPendingFiles(1, 20)
 			if err != nil {
 				panic(err.Error())
 			}
 			fmt.Println(pendingFiles)
-		case 4:
+		case 3:
 			if _, err := adapters.Adpaters["vidhide"].Upload("/home/nemila/Videos/go_http_tutorial.mp4"); err != nil {
 				panic(err.Error())
 			}
-		case 5:
+		case 4:
 			if err := processFiles(orm); err != nil {
 				panic(err.Error())
 			}
