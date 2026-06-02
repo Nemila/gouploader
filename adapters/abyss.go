@@ -12,14 +12,8 @@ import (
 	"time"
 )
 
-type abyss struct {
+type Abyss struct {
 	apiKey string
-}
-
-func NewAbyssAdapter(apiKey string) *abyss {
-	return &abyss{
-		apiKey: apiKey,
-	}
 }
 
 type abyssUploadResponse struct {
@@ -27,13 +21,13 @@ type abyssUploadResponse struct {
 	Slug   string `json:"slug"`
 }
 
-func (a *abyss) Upload(filePath string) (string, error) {
+func (a *Abyss) Upload(filePath string) (string, error) {
 	pr, pw := io.Pipe()
 	writer := multipart.NewWriter(pw)
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("[abyss.Upload] failed to open file: %w", err)
 	}
 	defer file.Close()
 
@@ -60,15 +54,16 @@ func (a *abyss) Upload(filePath string) (string, error) {
 	}
 
 	url := "http://up.hydrax.net/" + a.apiKey
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("[abyss.Upload] failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	res, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("[abyss.Upload] failed to execute request: %w", err)
 	}
 	defer res.Body.Close()
 
@@ -77,6 +72,5 @@ func (a *abyss) Upload(filePath string) (string, error) {
 		return "", err
 	}
 
-	fmt.Println(uploadRes)
 	return uploadRes.Slug, nil
 }

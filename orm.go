@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"fmt"
 	"gouploader/sqlc"
 )
 
@@ -17,12 +18,21 @@ type Orm struct {
 //go:embed schema.sql
 var schema string
 
+type FileStatus int
+
+const (
+	PENDING FileStatus = iota
+	PROCESSING
+	MISSING
+	DONE
+)
+
 func NewOrm() (*Orm, error) {
 	ctx := context.Background()
 
 	db, err := sql.Open("sqlite", "./database.db")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("[orm.NewOrm] failed to open database: %w", err)
 	}
 
 	queries := sqlc.New(db)
@@ -36,7 +46,7 @@ func NewOrm() (*Orm, error) {
 func (orm *Orm) Migrate() error {
 	_, err := orm.db.ExecContext(orm.ctx, schema)
 	if err != nil {
-		return err
+		return fmt.Errorf("[orm.Migrate] failed execute schema: %w", err)
 	}
 	return nil
 }
@@ -47,7 +57,7 @@ func (orm *Orm) GetPendingFiles(page int64, perPage int64) ([]sqlc.File, error) 
 		Offset: (page - 1) * perPage,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("[orm.GetPendingFiles] query failed: %w", err)
 	}
 	return files, nil
 }
@@ -58,7 +68,7 @@ func (orm *Orm) FindFileByPath(path string) (*sqlc.File, error) {
 		if errors.Is(sql.ErrNoRows, err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("[orm.FindFileByPath] query failed: %w", err)
 	}
 	return &file, nil
 }
@@ -69,7 +79,7 @@ func (orm *Orm) GetFileUploads(fileId int64) ([]sqlc.UploadJob, error) {
 		if errors.Is(sql.ErrNoRows, err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("[orm.GetFileUploads] query failed: %w", err)
 	}
 	return uploads, nil
 }
@@ -77,28 +87,19 @@ func (orm *Orm) GetFileUploads(fileId int64) ([]sqlc.UploadJob, error) {
 func (orm *Orm) RegisterFile(path string) error {
 	fileExists, err := orm.FindFileByPath(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("[orm.RegisterFile] find file by path failed: %w", err)
 	}
 
 	if fileExists != nil {
-		return nil
+		return fmt.Errorf("[orm.RegisterFile] file already exists: %w", err)
 	}
 
 	err = orm.queries.AddFile(orm.ctx, path)
 	if err != nil {
-		return err
+		return fmt.Errorf("[orm.RegisterFile] failed to add file: %w", err)
 	}
 	return nil
 }
-
-type FileStatus int
-
-const (
-	PENDING FileStatus = iota
-	PROCESSING
-	MISSING
-	DONE
-)
 
 func (orm *Orm) UpdateFileStatus(status FileStatus, errorMsg string, fileId int64) error {
 	statuses := [...]string{"PENDING", "PROCESSING", "MISSING", "DONE"}
@@ -108,7 +109,7 @@ func (orm *Orm) UpdateFileStatus(status FileStatus, errorMsg string, fileId int6
 		ID:     fileId,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("[orm.UpdateFileStatus] query failed: %w", err)
 	}
 	return nil
 }

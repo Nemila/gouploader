@@ -26,10 +26,6 @@ func displayMenu() {
 }
 
 func main() {
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-
 	var choice int = 1
 
 	for choice != 0 {
@@ -62,7 +58,7 @@ func main() {
 			}
 			fmt.Println(pendingFiles)
 		case 4:
-			_, err := adapters.Adpaters["uqload"].Upload("/home/nemila/Videos/video.mp4")
+			_, err := adapters.Adpaters["vidhide"].Upload("/home/nemila/Videos/go_http_tutorial.mp4")
 			if err != nil {
 				panic(err.Error())
 			}
@@ -82,7 +78,7 @@ func getDirFiles(path string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return files, err
+		return nil, fmt.Errorf("[getDirFiles] walk dir failed: %w", err)
 	}
 
 	return files, nil
@@ -91,7 +87,7 @@ func getDirFiles(path string) ([]string, error) {
 func processFiles(orm *Orm) error {
 	files, err := orm.GetPendingFiles(1, 20)
 	if err != nil {
-		return err
+		return fmt.Errorf("[processFiles] failed to get pending files: %w", err)
 	}
 
 	for _, file := range files {
@@ -131,5 +127,6 @@ func processFiles(orm *Orm) error {
 
 		}
 	}
+
 	return nil
 }

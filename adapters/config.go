@@ -13,6 +13,14 @@ type Adapter interface {
 var err error = godotenv.Load()
 
 var Adpaters map[string]Adapter = map[string]Adapter{
-	"abyss":  NewAbyssAdapter(os.Getenv("ABYSS_KEY")),
-	"uqload": NewUqloadAdapter(os.Getenv("UQLOAD_KEY")),
+	"abyss": &Abyss{
+		apiKey: os.Getenv("ABYSS_KEY"),
+	},
+	"uqload": &Uqload{
+		apiKey: os.Getenv("UQLOAD_KEY"),
+	},
+	"vidhide": &Vidhide{
+		apiKey: os.Getenv("VIDHIDE_KEY"),
+		sessId: os.Getenv("VIDHIDE_SESSID"),
+	},
 }
