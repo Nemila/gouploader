@@ -10,6 +10,7 @@ import (
 	"gouploader/adapters"
 	"gouploader/sqlc"
 
+	// "github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 )
 
@@ -21,9 +22,14 @@ func displayMenu() {
 	fmt.Println("1 - PUSH CHANGES TO DATABASE")
 	fmt.Println("2 - REGISTER FILES")
 	fmt.Println("3 - DISPLAY PENDING FILES")
+	fmt.Println("4 - UPLOAD FILE TO ABYSS")
 }
 
 func main() {
+	// if err != nil {
+	// 	panic(err.Error())
+	// }
+
 	var choice int = 1
 
 	for choice != 0 {
@@ -55,6 +61,11 @@ func main() {
 				panic(err.Error())
 			}
 			fmt.Println(pendingFiles)
+		case 4:
+			_, err := adapters.Adpaters["uqload"].Upload("/home/nemila/Videos/video.mp4")
+			if err != nil {
+				panic(err.Error())
+			}
 		}
 	}
 

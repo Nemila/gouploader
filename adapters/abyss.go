@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,27 +8,28 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-type Abyss struct {
+type abyss struct {
 	apiKey string
 }
 
-func NewAbyssAdapter(apiKey string) *Abyss {
-	return &Abyss{
+func NewAbyssAdapter(apiKey string) *abyss {
+	return &abyss{
 		apiKey: apiKey,
 	}
 }
 
-type uploadResponse struct {
+type abyssUploadResponse struct {
 	Status bool   `json:"status"`
 	Slug   string `json:"slug"`
 }
 
-func (a *Abyss) Upload(filePath string) (string, error) {
-	var body bytes.Buffer
-	writter := multipart.NewWriter(&body)
+func (a *abyss) Upload(filePath string) (string, error) {
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -37,14 +37,22 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	part, err := writter.CreateFormFile("file", file.Name())
-	if err != nil {
-		return "", err
-	}
+	go func() {
+		defer pw.Close()
+		defer writer.Close()
 
-	if _, err := io.Copy(part, file); err != nil {
-		return "", err
-	}
+		part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+
+		_, err = io.Copy(part, file)
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+	}()
 
 	ctx := context.Background()
 	client := &http.Client{
@@ -52,19 +60,19 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 
 	url := "http://up.hydrax.net/" + a.apiKey
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	res, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
-
 	defer res.Body.Close()
 
-	var uploadRes uploadResponse
+	var uploadRes abyssUploadResponse
 	if err := json.NewDecoder(res.Body).Decode(&uploadRes); err != nil {
 		return "", err
 	}
