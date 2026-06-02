@@ -11,9 +11,9 @@ build:
 
 # Build and safely deploy to the VPS
 deploy: build
-	ssh ultra "mkdir -p /scripts/gouploader"
-	scp gouploader ultra:/scripts/gouploader
-	@echo "✅ Deployment successful! Binary copied to /scripts/gouploader"
+	ssh ultra "mkdir -p ~/scripts"
+	scp gouploader ultra:~/scripts
+	@echo "✅ Deployment successful! Binary copied to ~/scripts"
 
 # Wipe SQLite database clean and re-apply schema without deleting the file
 db-reset:

@@ -116,6 +116,17 @@ func processFiles(orm *Orm) error {
 				}
 			}
 
+			if uploadExists == nil {
+				slugId, err := adapter.Upload(file.FilePath)
+				if err != nil {
+					_ = orm.UpdateFileStatus(file.ID, FilePending, "")
+					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
+					continue
+				}
+				_ = orm.AddUpload(file.ID, UploadDone, hostName, slugId, "")
+				continue
+			}
+
 			if uploadExists.Status == "DONE" {
 				continue
 			}
@@ -130,18 +141,6 @@ func processFiles(orm *Orm) error {
 				_ = orm.CompleteUpload(file.ID, slugId)
 				continue
 			}
-
-			if uploadExists == nil {
-				slugId, err := adapter.Upload(file.FilePath)
-				if err != nil {
-					_ = orm.UpdateFileStatus(file.ID, FilePending, "")
-					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
-					continue
-				}
-				_ = orm.AddUpload(file.ID, UploadDone, hostName, slugId, "")
-				continue
-			}
-
 		}
 
 	}
