@@ -20,7 +20,7 @@ func (q *Queries) AddFile(ctx context.Context, filePath string) error {
 }
 
 const addUpload = `-- name: AddUpload :exec
-INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug_id) VALUES (?, ?, ?, ?, ?)
+INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug) VALUES (?, ?, ?, ?, ?)
 `
 
 type AddUploadParams struct {
@@ -28,7 +28,7 @@ type AddUploadParams struct {
 	HostName  string
 	Status    string
 	LastError sql.NullString
-	SlugID    sql.NullString
+	Slug      sql.NullString
 }
 
 func (q *Queries) AddUpload(ctx context.Context, arg AddUploadParams) error {
@@ -37,22 +37,22 @@ func (q *Queries) AddUpload(ctx context.Context, arg AddUploadParams) error {
 		arg.HostName,
 		arg.Status,
 		arg.LastError,
-		arg.SlugID,
+		arg.Slug,
 	)
 	return err
 }
 
 const completeUpload = `-- name: CompleteUpload :exec
-UPDATE upload_jobs SET status = "DONE", slug_id = ? WHERE id = ?
+UPDATE upload_jobs SET status = "DONE", slug = ? WHERE id = ?
 `
 
 type CompleteUploadParams struct {
-	SlugID sql.NullString
-	ID     int64
+	Slug sql.NullString
+	ID   int64
 }
 
 func (q *Queries) CompleteUpload(ctx context.Context, arg CompleteUploadParams) error {
-	_, err := q.db.ExecContext(ctx, completeUpload, arg.SlugID, arg.ID)
+	_, err := q.db.ExecContext(ctx, completeUpload, arg.Slug, arg.ID)
 	return err
 }
 
@@ -87,7 +87,7 @@ func (q *Queries) FindFileByPath(ctx context.Context, filePath string) (File, er
 }
 
 const getFileUploads = `-- name: GetFileUploads :many
-SELECT id, file_id, host_name, status, retry_count, last_error, slug_id FROM upload_jobs WHERE file_id=?
+SELECT id, file_id, host_name, status, retry_count, last_error, slug FROM upload_jobs WHERE file_id=?
 `
 
 func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob, error) {
@@ -106,7 +106,7 @@ func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob
 			&i.Status,
 			&i.RetryCount,
 			&i.LastError,
-			&i.SlugID,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}

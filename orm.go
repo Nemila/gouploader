@@ -152,12 +152,12 @@ func (o *Orm) FailUpload(fileId int64, errorMsg string) error {
 	return nil
 }
 
-func (o *Orm) CompleteUpload(fileId int64, slugId string) error {
+func (o *Orm) CompleteUpload(fileId int64, slug string) error {
 	err := o.queries.CompleteUpload(o.ctx, sqlc.CompleteUploadParams{
 		ID: fileId,
-		SlugID: sql.NullString{
-			String: slugId,
-			Valid:  slugId != "",
+		Slug: sql.NullString{
+			String: slug,
+			Valid:  slug != "",
 		},
 	})
 	if err != nil {
@@ -166,7 +166,7 @@ func (o *Orm) CompleteUpload(fileId int64, slugId string) error {
 	return nil
 }
 
-func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slugId string, errorMsg string) error {
+func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slug string, errorMsg string) error {
 	statuses := [...]string{"PENDING", "FAILED", "DONE"}
 	if status < UploadPending || status > UploadDone {
 		return fmt.Errorf("[o.AddUpload] invalid status")
@@ -176,7 +176,7 @@ func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slug
 		Status:    statuses[status],
 		FileID:    fileId,
 		HostName:  hostName,
-		SlugID:    sql.NullString{String: slugId, Valid: slugId != ""},
+		Slug:      sql.NullString{String: slug, Valid: slug != ""},
 		LastError: sql.NullString{String: errorMsg, Valid: errorMsg != ""},
 	})
 	if err != nil {

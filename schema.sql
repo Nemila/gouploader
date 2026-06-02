@@ -13,6 +13,6 @@ CREATE TABLE upload_jobs (
     status TEXT DEFAULT 'PENDING' NOT NULL, -- FAILED | DONE | PENDING 
     retry_count INTEGER DEFAULT 0,
     last_error TEXT,
-    slug_id TEXT,
+    slug TEXT,
     UNIQUE(file_id, host_name)
 );

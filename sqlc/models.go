@@ -23,5 +23,5 @@ type UploadJob struct {
 	Status     string
 	RetryCount sql.NullInt64
 	LastError  sql.NullString
-	SlugID     sql.NullString
+	Slug       sql.NullString
 }

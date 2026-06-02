@@ -6,7 +6,7 @@ ORDER BY id LIMIT ? OFFSET ?;
 INSERT INTO files (file_path) VALUES (?);
 
 -- name: AddUpload :exec
-INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug_id) VALUES (?, ?, ?, ?, ?);
+INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug) VALUES (?, ?, ?, ?, ?);
 
 -- name: FindFileByPath :one
 SELECT * FROM files WHERE file_path=? LIMIT 1;
@@ -21,5 +21,5 @@ UPDATE files SET status = ? WHERE id = ?;
 UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?;
 
 -- name: CompleteUpload :exec
-UPDATE upload_jobs SET status = "DONE", slug_id = ? WHERE id = ?;
+UPDATE upload_jobs SET status = "DONE", slug = ? WHERE id = ?;
 

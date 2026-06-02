@@ -110,15 +110,15 @@ func processFiles(orm *Orm) error {
 			}
 
 			if uploadExists == nil {
-				slugId, err := adapter.Upload(file.FilePath)
+				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
 					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
 					fmt.Printf("\nupload failed for host %s(%s): %s", hostName, file.FilePath, err.Error())
 					continue
 				}
-				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slugId)
-				_ = orm.AddUpload(file.ID, UploadDone, hostName, slugId, "")
+				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
+				_ = orm.AddUpload(file.ID, UploadDone, hostName, slug, "")
 				continue
 			}
 
@@ -128,15 +128,15 @@ func processFiles(orm *Orm) error {
 			}
 
 			if uploadExists.Status == "FAILED" {
-				slugId, err := adapter.Upload(file.FilePath)
+				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
 					_ = orm.FailUpload(file.ID, err.Error())
 					fmt.Printf("\nupload failed for host %s(%s): %s", hostName, file.FilePath, err.Error())
 					continue
 				}
-				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slugId)
-				_ = orm.CompleteUpload(file.ID, slugId)
+				fmt.Printf("\nupload complete for host %s(%s): %s", hostName, file.FilePath, slug)
+				_ = orm.CompleteUpload(file.ID, slug)
 				continue
 			}
 		}
