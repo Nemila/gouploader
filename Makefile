@@ -14,9 +14,3 @@ deploy: build
 	ssh ultra "mkdir -p ~/scripts"
 	scp gouploader ultra:~/scripts
 	@echo "✅ Deployment successful! Binary copied to ~/scripts"
-
-# Wipe SQLite database clean and re-apply schema without deleting the file
-db-reset:
-	sqlite3 database.db "PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0; VACUUM;"
-	sqlite3 database.db < schema.sql
-	@echo "✅ Database wiped and schema.sql applied successfully!"

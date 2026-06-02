@@ -71,7 +71,7 @@ func (q *Queries) FailUpload(ctx context.Context, arg FailUploadParams) error {
 }
 
 const findFileByPath = `-- name: FindFileByPath :one
-SELECT id, file_path, discovered_at, status, error FROM files WHERE file_path=? LIMIT 1
+SELECT id, file_path, discovered_at, status FROM files WHERE file_path=? LIMIT 1
 `
 
 func (q *Queries) FindFileByPath(ctx context.Context, filePath string) (File, error) {
@@ -82,7 +82,6 @@ func (q *Queries) FindFileByPath(ctx context.Context, filePath string) (File, er
 		&i.FilePath,
 		&i.DiscoveredAt,
 		&i.Status,
-		&i.Error,
 	)
 	return i, err
 }
@@ -123,7 +122,7 @@ func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob
 }
 
 const getPendingFile = `-- name: GetPendingFile :many
-SELECT id, file_path, discovered_at, status, error FROM files WHERE status = 'PENDING'
+SELECT id, file_path, discovered_at, status FROM files WHERE status = 'PENDING'
 ORDER BY id LIMIT ? OFFSET ?
 `
 
@@ -146,7 +145,6 @@ func (q *Queries) GetPendingFile(ctx context.Context, arg GetPendingFileParams) 
 			&i.FilePath,
 			&i.DiscoveredAt,
 			&i.Status,
-			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -162,16 +160,15 @@ func (q *Queries) GetPendingFile(ctx context.Context, arg GetPendingFileParams) 
 }
 
 const updateFileStatus = `-- name: UpdateFileStatus :exec
-UPDATE files SET status = ?, error = ? WHERE id = ?
+UPDATE files SET status = ? WHERE id = ?
 `
 
 type UpdateFileStatusParams struct {
 	Status string
-	Error  sql.NullString
 	ID     int64
 }
 
 func (q *Queries) UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateFileStatus, arg.Status, arg.Error, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateFileStatus, arg.Status, arg.ID)
 	return err
 }

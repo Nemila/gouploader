@@ -44,6 +44,7 @@ func NewOrm() (*Orm, error) {
 	}
 
 	queries := sqlc.New(db)
+
 	return &Orm{
 		ctx:     ctx,
 		db:      db,
@@ -113,7 +114,7 @@ func (o *Orm) RegisterFile(path string) error {
 	}
 
 	if fileExists != nil {
-		return fmt.Errorf("[o.RegisterFile] file already exists: %w", err)
+		return nil
 	}
 
 	err = o.queries.AddFile(o.ctx, path)
@@ -123,7 +124,7 @@ func (o *Orm) RegisterFile(path string) error {
 	return nil
 }
 
-func (o *Orm) UpdateFileStatus(fileId int64, status FileStatus, errorMsg string) error {
+func (o *Orm) UpdateFileStatus(fileId int64, status FileStatus) error {
 	statuses := [...]string{"PENDING", "PROCESSING", "MISSING", "DONE"}
 	if status < FilePending || status > FileDone {
 		return fmt.Errorf("[o.UpdateFileStatus] invalid status")
@@ -132,7 +133,6 @@ func (o *Orm) UpdateFileStatus(fileId int64, status FileStatus, errorMsg string)
 	err := o.queries.UpdateFileStatus(o.ctx, sqlc.UpdateFileStatusParams{
 		ID:     fileId,
 		Status: statuses[status],
-		Error:  sql.NullString{String: errorMsg, Valid: errorMsg != ""},
 	})
 	if err != nil {
 		return fmt.Errorf("[o.UpdateFileStatus] query failed: %w", err)

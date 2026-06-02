@@ -14,7 +14,6 @@ type File struct {
 	FilePath     string
 	DiscoveredAt time.Time
 	Status       string
-	Error        sql.NullString
 }
 
 type UploadJob struct {

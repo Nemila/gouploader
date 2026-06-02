@@ -15,7 +15,7 @@ SELECT * FROM files WHERE file_path=? LIMIT 1;
 SELECT * FROM upload_jobs WHERE file_id=?; 
 
 -- name: UpdateFileStatus :exec
-UPDATE files SET status = ?, error = ? WHERE id = ?;
+UPDATE files SET status = ? WHERE id = ?;
 
 -- name: FailUpload :exec
 UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?;
