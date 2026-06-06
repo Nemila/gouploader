@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 type Abyss struct {
 	apiKey string
+	client *http.Client
 }
 
 type abyssUploadResponse struct {
@@ -23,49 +22,54 @@ type abyssUploadResponse struct {
 }
 
 func (a *Abyss) Upload(filePath string) (string, error) {
-	buf := &bytes.Buffer{}
-	writer := multipart.NewWriter(buf)
+	pr, pw := io.Pipe()
+	w := multipart.NewWriter(pw)
 
-	file, err := os.Open(filePath)
+	go func() {
+		defer pw.Close()
+		defer w.Close()
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+		defer file.Close()
+
+		part, err := w.CreateFormFile("file", filepath.Base(file.Name()))
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+
+		if _, err := io.Copy(part, file); err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+	}()
+
+	url := fmt.Sprintf("http://up.hydrax.net/%s", a.apiKey)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, pr)
 	if err != nil {
-		return "", fmt.Errorf("[abyss.Upload] failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
-	if err != nil {
-		return "", fmt.Errorf("[abyss.Upload] failed to create form file: %w", err)
-	}
-
-	if _, err := io.Copy(part, file); err != nil {
-		return "", fmt.Errorf("[abyss.Upload] failed to copy file: %w", err)
-	}
-
-	writer.Close()
-
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
-	}
-
-	url := "http://up.hydrax.net/" + a.apiKey
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, buf)
-	if err != nil {
-		return "", fmt.Errorf("[abyss.Upload] failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	res, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("[abyss.Upload] failed to execute request: %w", err)
-	}
-	defer res.Body.Close()
-
-	var uploadRes abyssUploadResponse
-	if err := json.NewDecoder(res.Body).Decode(&uploadRes); err != nil {
 		return "", err
 	}
 
-	return uploadRes.Slug, nil
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	res, err := a.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	var data abyssUploadResponse
+	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
+		return "", err
+	}
+
+	if !data.Status || len(data.Slug) < 1 {
+		return "", fmt.Errorf("abyss upload failed %s", data.Slug)
+	}
+
+	return data.Slug, nil
 }

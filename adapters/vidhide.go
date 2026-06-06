@@ -11,15 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"time"
 )
 
 type Vidhide struct {
 	apiKey string
 	sessId string
+	client *http.Client
 }
 
-type vidhideGetUploadServerResponse struct {
+type vidhideGetUploadServer struct {
 	Msg        string `json:"msg"`
 	ServerTime string `json:"server_time"`
 	Status     int    `json:"status"`
@@ -32,29 +32,53 @@ func (vh *Vidhide) getContentLength(filePath string) (int64, error) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return 0, fmt.Errorf("[vidhide.getContentLength] failed to open file: %w", err)
+		return 0, err
 	}
-
 	defer file.Close()
 
 	if err := writer.WriteField("sess_id", vh.sessId); err != nil {
-		return 0, fmt.Errorf("[vidhide.getContentLength] failed to write sess_id: %w", err)
+		return 0, err
 	}
 
-	_, err = writer.CreateFormFile("file", filepath.Base(file.Name()))
-	if err != nil {
-		return 0, fmt.Errorf("[vidhide.getContentLength] failed to create form file: %w", err)
+	if _, err := writer.CreateFormFile("file", filepath.Base(file.Name())); err != nil {
+		return 0, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return 0, err
 	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("[vidhide.getContentLength] failed to get file stat: %w", err)
+		return 0, err
 	}
 
-	_ = writer.Close()
-	contentLength := fileInfo.Size() + int64(bodyBuffer.Len())
+	return fileInfo.Size() + int64(bodyBuffer.Len()), nil
+}
 
-	return contentLength, nil
+func (vh *Vidhide) getUploadServer() (string, error) {
+	url := fmt.Sprintf("https://earnvidsapi.com/api/upload/server?key=%s", vh.apiKey)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := vh.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	var data vidhideGetUploadServer
+	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
+		return "", err
+	}
+
+	if data.Status != 200 || len(data.Result) < 1 {
+		return "", fmt.Errorf("failed to get upload server %s", data.Msg)
+	}
+
+	return data.Result, nil
 }
 
 func (vh *Vidhide) Upload(filePath string) (string, error) {
@@ -63,14 +87,9 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to open file: %w", err)
+		return "", err
 	}
 	defer file.Close()
-
-	url, err := vh.getUploadServer()
-	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to get upload server: %w", err)
-	}
 
 	go func() {
 		defer pw.Close()
@@ -94,72 +113,44 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 		}
 	}()
 
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
+	url, err := vh.getUploadServer()
+	if err != nil {
+		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, pr)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed create request: %w", err)
+		return "", err
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	contentLength, err := vh.getContentLength(filePath)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to get content length: %w", err)
+		return "", err
 	}
 	req.ContentLength = contentLength
 
-	res, err := client.Do(req)
+	res, err := vh.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to execute request: %w", err)
+		return "", err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("[vidhide.Upload] server returned status %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("vidhide upload failed %s", res.Status)
 	}
 
-	uploadRes, err := io.ReadAll(res.Body)
+	html, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to read response: %w", err)
+		return "", err
 	}
 
 	re := regexp.MustCompile(`name="fn">([^<]+)`)
-	matches := re.FindStringSubmatch(string(uploadRes))
+	matches := re.FindStringSubmatch(string(html))
 	if len(matches) < 1 {
-		return "", fmt.Errorf("[vidhide.Upload] failed to extract slug")
+		return "", fmt.Errorf("failed to extract slug")
 	}
 
 	return matches[1], nil
-}
-
-func (vh *Vidhide) getUploadServer() (string, error) {
-	url := "https://earnvidsapi.com/api/upload/server?key=" + vh.apiKey
-
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", fmt.Errorf("[vidhide.getUploadServer] failed to create request: %w", err)
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("[vidhide.getUploadServer] failed to execute request: %w", err)
-	}
-	defer res.Body.Close()
-
-	var getUploadServerRes uqloadGetUploadServerResponse
-	if err := json.NewDecoder(res.Body).Decode(&getUploadServerRes); err != nil {
-		return "", fmt.Errorf("[vidhide.getUploadServer] failed to decode json: %w", err)
-	}
-
-	return getUploadServerRes.Result, nil
 }

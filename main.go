@@ -58,13 +58,6 @@ func main() {
 		return
 	}
 
-	// adapter := adapters.Adapters["sendvid"]
-	// sendvid := adapter.(*adapters.Sendvid)
-	// if _, err := sendvid.Upload("/home/nemila/Videos/video.mp4"); err != nil {
-	// 	panic(err.Error())
-	// }
-	// return
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

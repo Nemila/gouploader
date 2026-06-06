@@ -11,15 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"time"
 )
 
 type Uqload struct {
 	apiKey string
 	sessId string
+	client *http.Client
 }
 
-type uqloadGetUploadServerResponse struct {
+type uqloadGetUploadServer struct {
 	Msg        string `json:"msg"`
 	ServerTime string `json:"server_time"`
 	Status     int    `json:"status"`
@@ -27,61 +27,80 @@ type uqloadGetUploadServerResponse struct {
 }
 
 func (u *Uqload) getContentLength(filePath string) (int64, error) {
-	bodyBuffer := &bytes.Buffer{}
-	writer := multipart.NewWriter(bodyBuffer)
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return 0, fmt.Errorf("[uqload.getContentLength] failed to open file: %w", err)
+		return 0, err
 	}
-
 	defer file.Close()
 
-	if err := writer.WriteField("sess_id", u.sessId); err != nil {
-		return 0, fmt.Errorf("[uqload.getContentLength] failed to write sess_id: %w", err)
+	if _, err := w.CreateFormFile("file", filepath.Base(file.Name())); err != nil {
+		return 0, err
 	}
 
-	_, err = writer.CreateFormFile("file", filepath.Base(file.Name()))
-	if err != nil {
-		return 0, fmt.Errorf("[uqload.getContentLength] failed to create form file: %w", err)
+	if err := w.WriteField("sess_id", u.sessId); err != nil {
+		return 0, err
+	}
+
+	if err := w.Close(); err != nil {
+		return 0, err
 	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("[uqload.getContentLength] failed to get file stat: %w", err)
+		return 0, err
 	}
 
-	_ = writer.Close()
-	contentLength := fileInfo.Size() + int64(bodyBuffer.Len())
+	return fileInfo.Size() + int64(buf.Len()), nil
+}
 
-	return contentLength, nil
+func (u *Uqload) getUploadServer() (string, error) {
+	url := fmt.Sprintf("https://uqload.is/api/upload/server?key=%s", u.apiKey)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := u.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("[uqload.getUploadServer] failed to execute request: %w", err)
+	}
+	defer res.Body.Close()
+
+	var data uqloadGetUploadServer
+	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
+		return "", err
+	}
+
+	if data.Status != 200 || len(data.Result) < 1 {
+		return "", fmt.Errorf("failed to get upload server %s", data.Msg)
+	}
+
+	return data.Result, nil
 }
 
 func (u *Uqload) Upload(filePath string) (string, error) {
 	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
+	w := multipart.NewWriter(pw)
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("[uqload.Upload] failed to open file: %w", err)
+		return "", err
 	}
 	defer file.Close()
 
-	url, err := u.getUploadServer()
-	if err != nil {
-		return "", fmt.Errorf("[uqload.Upload] failed to get upload server: %w", err)
-	}
-
 	go func() {
 		defer pw.Close()
-		defer writer.Close()
+		defer w.Close()
 
-		if err := writer.WriteField("sess_id", u.sessId); err != nil {
+		if err := w.WriteField("sess_id", u.sessId); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
 
-		part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+		part, err := w.CreateFormFile("file", filepath.Base(file.Name()))
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
@@ -94,72 +113,44 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 		}
 	}()
 
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
+	url, err := u.getUploadServer()
 	if err != nil {
-		return "", fmt.Errorf("[uqload.Upload] failed to create request: %w", err)
+		return "", err
 	}
 
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, pr)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", w.FormDataContentType())
 
 	contentLength, err := u.getContentLength(filePath)
 	if err != nil {
-		return "", fmt.Errorf("[uqload.Upload] failed to get content length: %w", err)
+		return "", err
 	}
 	req.ContentLength = contentLength
 
-	res, err := client.Do(req)
+	res, err := u.client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("[uqload.Upload] server returned status %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("uqload upload failed %s", res.Status)
 	}
 
-	uploadRes, err := io.ReadAll(res.Body)
+	html, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", fmt.Errorf("[uqload.Upload] failed to read response: %w", err)
+		return "", err
 	}
 
 	re := regexp.MustCompile(`name="fn">([^<]+)`)
-	matches := re.FindStringSubmatch(string(uploadRes))
+	matches := re.FindStringSubmatch(string(html))
 	if len(matches) < 1 {
-		return "", fmt.Errorf("[uqload.Upload] failed to extract slug")
+		return "", fmt.Errorf("failed to extract slug")
 	}
 
 	return matches[1], nil
-}
-
-func (u *Uqload) getUploadServer() (string, error) {
-	url := "https://uqload.is/api/upload/server?key=" + u.apiKey
-
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", fmt.Errorf("[uqload.getUploadServer] failed to create request: %w", err)
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("[uqload.getUploadServer] failed to execute request: %w", err)
-	}
-	defer res.Body.Close()
-
-	var getUploadServerRes uqloadGetUploadServerResponse
-	if err := json.NewDecoder(res.Body).Decode(&getUploadServerRes); err != nil {
-		return "", fmt.Errorf("[uqload.getUploadServer] failed to decode json: %w", err)
-	}
-
-	return getUploadServerRes.Result, nil
 }
