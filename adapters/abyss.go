@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,31 +19,6 @@ type Abyss struct {
 type abyssUploadResponse struct {
 	Status bool   `json:"status"`
 	Slug   string `json:"slug"`
-}
-
-func (a *Abyss) getContentLength(filePath string) (int64, error) {
-	buf := &bytes.Buffer{}
-	w := multipart.NewWriter(buf)
-	if err := w.Close(); err != nil {
-		return 0, err
-	}
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	if _, err := w.CreateFormFile("file", filepath.Base(f.Name())); err != nil {
-		return 0, err
-	}
-
-	i, err := os.Stat(filePath)
-	if err != nil {
-		return 0, nil
-	}
-
-	return int64(buf.Len()) + i.Size(), nil
 }
 
 func (a *Abyss) Upload(filePath string) (string, error) {
@@ -81,12 +55,6 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
-
-	n, err := a.getContentLength(filePath)
-	if err != nil {
-		return "", err
-	}
-	req.ContentLength = n
 
 	res, err := a.client.Do(req)
 	if err != nil {

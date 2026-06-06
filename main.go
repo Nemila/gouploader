@@ -112,7 +112,7 @@ func getDirFiles(path string) ([]string, error) {
 }
 
 func processFiles(ctx context.Context, orm *Orm) error {
-	files, err := orm.GetPendingFiles(1, 20)
+	files, err := orm.GetPendingFiles(1, 999999999999999999)
 	if err != nil {
 		return fmt.Errorf("[processFiles] failed to get pending files: %w", err)
 	}

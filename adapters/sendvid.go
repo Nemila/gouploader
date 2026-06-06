@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -56,6 +57,17 @@ func (s *Sendvid) getContentLength(filePath, token string) (int64, error) {
 	return int64(buf.Len()) + i.Size(), nil
 }
 
+func (s *Sendvid) isLoggedIn() bool {
+	u, _ := url.Parse("https://sendvid.com")
+	cookies := s.client.Jar.Cookies(u)
+	for _, cookie := range cookies {
+		if strings.Contains(cookie.Name, "_sendvid_session") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Sendvid) ping() (string, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://sendvid.com/?li=t", nil)
 	if err != nil {
@@ -83,6 +95,10 @@ func (s *Sendvid) ping() (string, error) {
 }
 
 func (s *Sendvid) login() error {
+	if s.isLoggedIn() {
+		return nil
+	}
+
 	token, err := s.ping()
 	if err != nil {
 		return err
