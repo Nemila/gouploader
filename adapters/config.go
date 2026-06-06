@@ -1,7 +1,10 @@
 package adapters
 
 import (
+	"net/http"
+	"net/http/cookiejar"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -11,8 +14,9 @@ type Adapter interface {
 }
 
 var err error = godotenv.Load()
+var jar, _ = cookiejar.New(nil)
 
-var Adpaters map[string]Adapter = map[string]Adapter{
+var Adapters map[string]Adapter = map[string]Adapter{
 	"abyss": &Abyss{
 		apiKey: os.Getenv("ABYSS_KEY"),
 	},
@@ -23,5 +27,12 @@ var Adpaters map[string]Adapter = map[string]Adapter{
 	"vidhide": &Vidhide{
 		apiKey: os.Getenv("VIDHIDE_KEY"),
 		sessId: os.Getenv("VIDHIDE_SESSID"),
+	},
+	"sendvid": &Sendvid{
+		apiKey: os.Getenv("SENDVID_KEY"),
+		client: &http.Client{
+			Timeout: 60 * time.Minute,
+			Jar:     jar,
+		},
 	},
 }

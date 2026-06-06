@@ -58,6 +58,13 @@ func main() {
 		return
 	}
 
+	// adapter := adapters.Adapters["sendvid"]
+	// sendvid := adapter.(*adapters.Sendvid)
+	// if _, err := sendvid.Upload("/home/nemila/Videos/video.mp4"); err != nil {
+	// 	panic(err.Error())
+	// }
+	// return
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -136,7 +143,7 @@ func processFiles(ctx context.Context, orm *Orm) error {
 		fmt.Printf("📄 Path: %s\n", file.FilePath)
 		fmt.Println("──────────────────────────────────────────────────────────")
 
-		for hostName, adapter := range adapters.Adpaters {
+		for hostName, adapter := range adapters.Adapters {
 			if ctx.Err() != nil {
 				_ = orm.UpdateFileStatus(file.ID, FilePending)
 				return ctx.Err()

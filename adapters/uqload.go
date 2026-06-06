@@ -120,18 +120,18 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("[vidhide.Upload] server returned status %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("[uqload.Upload] server returned status %d: %s", res.StatusCode, body)
 	}
 
 	uploadRes, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", fmt.Errorf("[vidhide.Upload] failed to read response: %w", err)
+		return "", fmt.Errorf("[uqload.Upload] failed to read response: %w", err)
 	}
 
 	re := regexp.MustCompile(`name="fn">([^<]+)`)
 	matches := re.FindStringSubmatch(string(uploadRes))
 	if len(matches) < 1 {
-		return "", fmt.Errorf("[vidhide.Upload] failed to extract slug")
+		return "", fmt.Errorf("[uqload.Upload] failed to extract slug")
 	}
 
 	return matches[1], nil

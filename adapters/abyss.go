@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,8 +23,8 @@ type abyssUploadResponse struct {
 }
 
 func (a *Abyss) Upload(filePath string) (string, error) {
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
+	buf := &bytes.Buffer{}
+	writer := multipart.NewWriter(buf)
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -31,22 +32,16 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	go func() {
-		defer pw.Close()
-		defer writer.Close()
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		return "", fmt.Errorf("[abyss.Upload] failed to create form file: %w", err)
+	}
 
-		part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
-		if err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
+	if _, err := io.Copy(part, file); err != nil {
+		return "", fmt.Errorf("[abyss.Upload] failed to copy file: %w", err)
+	}
 
-		_, err = io.Copy(part, file)
-		if err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-	}()
+	writer.Close()
 
 	ctx := context.Background()
 	client := &http.Client{
@@ -55,7 +50,7 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 
 	url := "http://up.hydrax.net/" + a.apiKey
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, buf)
 	if err != nil {
 		return "", fmt.Errorf("[abyss.Upload] failed to create request: %w", err)
 	}
