@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,31 @@ type abyssUploadResponse struct {
 	Slug   string `json:"slug"`
 }
 
+func (a *Abyss) getContentLength(filePath string) (int64, error) {
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	if _, err := w.CreateFormFile("file", filepath.Base(f.Name())); err != nil {
+		return 0, err
+	}
+
+	i, err := os.Stat(filePath)
+	if err != nil {
+		return 0, nil
+	}
+
+	return int64(buf.Len()) + i.Size(), nil
+}
+
 func (a *Abyss) Upload(filePath string) (string, error) {
 	pr, pw := io.Pipe()
 	w := multipart.NewWriter(pw)
@@ -29,20 +55,20 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 		defer pw.Close()
 		defer w.Close()
 
-		file, err := os.Open(filePath)
+		f, err := os.Open(filePath)
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
-		defer file.Close()
+		defer f.Close()
 
-		part, err := w.CreateFormFile("file", filepath.Base(file.Name()))
+		part, err := w.CreateFormFile("file", filepath.Base(f.Name()))
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
 
-		if _, err := io.Copy(part, file); err != nil {
+		if _, err := io.Copy(part, f); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
@@ -55,6 +81,12 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	n, err := a.getContentLength(filePath)
+	if err != nil {
+		return "", err
+	}
+	req.ContentLength = n
 
 	res, err := a.client.Do(req)
 	if err != nil {

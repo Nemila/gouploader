@@ -30,13 +30,13 @@ func (u *Uqload) getContentLength(filePath string) (int64, error) {
 	buf := &bytes.Buffer{}
 	w := multipart.NewWriter(buf)
 
-	file, err := os.Open(filePath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer f.Close()
 
-	if _, err := w.CreateFormFile("file", filepath.Base(file.Name())); err != nil {
+	if _, err := w.CreateFormFile("file", filepath.Base(f.Name())); err != nil {
 		return 0, err
 	}
 
@@ -48,12 +48,12 @@ func (u *Uqload) getContentLength(filePath string) (int64, error) {
 		return 0, err
 	}
 
-	fileInfo, err := file.Stat()
+	i, err := f.Stat()
 	if err != nil {
 		return 0, err
 	}
 
-	return fileInfo.Size() + int64(buf.Len()), nil
+	return i.Size() + int64(buf.Len()), nil
 }
 
 func (u *Uqload) getUploadServer() (string, error) {
@@ -125,11 +125,11 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	contentLength, err := u.getContentLength(filePath)
+	n, err := u.getContentLength(filePath)
 	if err != nil {
 		return "", err
 	}
-	req.ContentLength = contentLength
+	req.ContentLength = n
 
 	res, err := u.client.Do(req)
 	if err != nil {

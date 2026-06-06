@@ -125,11 +125,11 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	contentLength, err := vh.getContentLength(filePath)
+	n, err := vh.getContentLength(filePath)
 	if err != nil {
 		return "", err
 	}
-	req.ContentLength = contentLength
+	req.ContentLength = n
 
 	res, err := vh.client.Do(req)
 	if err != nil {

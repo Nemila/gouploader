@@ -27,6 +27,35 @@ type sendvidUploadResponse struct {
 	} `json:"video"`
 }
 
+func (s *Sendvid) getContentLength(filePath, token string) (int64, error) {
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+
+	if err := w.WriteField("authenticity_token", token); err != nil {
+		return 0, err
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	if _, err := w.CreateFormFile("video", filepath.Base(f.Name())); err != nil {
+		return 0, err
+	}
+
+	i, err := os.Stat(filePath)
+	if err != nil {
+		return 0, nil
+	}
+
+	return int64(buf.Len()) + i.Size(), nil
+}
+
 func (s *Sendvid) ping() (string, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://sendvid.com/?li=t", nil)
 	if err != nil {
@@ -121,25 +150,25 @@ func (s *Sendvid) Upload(filePath string) (string, error) {
 		defer pw.Close()
 		defer w.Close()
 
-		file, err := os.Open(filePath)
-		if err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-		defer file.Close()
-
 		if err := w.WriteField("authenticity_token", token); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
 
-		part, err := w.CreateFormFile("video", filepath.Base(file.Name()))
+		f, err := os.Open(filePath)
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+		defer f.Close()
+
+		part, err := w.CreateFormFile("video", filepath.Base(f.Name()))
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
 
-		if _, err := io.Copy(part, file); err != nil {
+		if _, err := io.Copy(part, f); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
@@ -152,6 +181,12 @@ func (s *Sendvid) Upload(filePath string) (string, error) {
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("X-CSRF-Token", token)
+
+	n, err := s.getContentLength(filePath, token)
+	if err != nil {
+		return "", err
+	}
+	req.ContentLength = n
 
 	res, err := s.client.Do(req)
 	if err != nil {
