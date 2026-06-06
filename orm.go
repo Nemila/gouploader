@@ -40,7 +40,7 @@ func NewOrm() (*Orm, error) {
 
 	db, err := sql.Open("sqlite", "./database.db")
 	if err != nil {
-		return nil, fmt.Errorf("[o.NewOrm] failed to open database: %w", err)
+		return nil, err
 	}
 
 	queries := sqlc.New(db)
@@ -53,21 +53,20 @@ func NewOrm() (*Orm, error) {
 }
 
 func (o *Orm) InitDatabase() error {
-	tableExists := false
 	query := `SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='files');`
+	tableExists := false
 
-	err := o.db.QueryRowContext(o.ctx, query).Scan(&tableExists)
-	if err != nil {
-		return fmt.Errorf("[o.Migrate] failed to check database state: %w", err)
+	if err := o.db.QueryRowContext(o.ctx, query).Scan(&tableExists); err != nil {
+		return err
 	}
 
 	if !tableExists {
 		fmt.Println("🔄 New database detected. Running initial migration schema...")
 
-		_, err = o.db.ExecContext(o.ctx, schema)
-		if err != nil {
-			return fmt.Errorf("[o.Migrate] failed to execute migration schema: %w", err)
+		if _, err := o.db.ExecContext(o.ctx, schema); err != nil {
+			return err
 		}
+
 		fmt.Println("✅ Database successfully initialized!")
 	}
 
@@ -80,7 +79,7 @@ func (o *Orm) GetPendingFiles(page int64, perPage int64) ([]sqlc.File, error) {
 		Offset: (page - 1) * perPage,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("[o.GetPendingFiles] query failed: %w", err)
+		return nil, err
 	}
 	return files, nil
 }
@@ -91,7 +90,7 @@ func (o *Orm) FindFileByPath(path string) (*sqlc.File, error) {
 		if errors.Is(sql.ErrNoRows, err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("[o.FindFileByPath] query failed: %w", err)
+		return nil, err
 	}
 	return &file, nil
 }
@@ -102,24 +101,23 @@ func (o *Orm) GetFileUploads(fileId int64) ([]sqlc.UploadJob, error) {
 		if errors.Is(sql.ErrNoRows, err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("[o.GetFileUploads] query failed: %w", err)
+		return nil, err
 	}
 	return uploads, nil
 }
 
 func (o *Orm) RegisterFile(path string) error {
-	fileExists, err := o.FindFileByPath(path)
+	f, err := o.FindFileByPath(path)
 	if err != nil {
-		return fmt.Errorf("[o.RegisterFile] find file by path failed: %w", err)
+		return err
 	}
 
-	if fileExists != nil {
+	if f != nil {
 		return nil
 	}
 
-	err = o.queries.AddFile(o.ctx, path)
-	if err != nil {
-		return fmt.Errorf("[o.RegisterFile] failed to add file: %w", err)
+	if err := o.queries.AddFile(o.ctx, path); err != nil {
+		return err
 	}
 	return nil
 }
@@ -127,41 +125,38 @@ func (o *Orm) RegisterFile(path string) error {
 func (o *Orm) UpdateFileStatus(fileId int64, status FileStatus) error {
 	statuses := [...]string{"PENDING", "PROCESSING", "MISSING", "DONE"}
 	if status < FilePending || status > FileDone {
-		return fmt.Errorf("[o.UpdateFileStatus] invalid status")
+		return fmt.Errorf("can't update file with invalid status")
 	}
 
-	err := o.queries.UpdateFileStatus(o.ctx, sqlc.UpdateFileStatusParams{
+	if err := o.queries.UpdateFileStatus(o.ctx, sqlc.UpdateFileStatusParams{
 		ID:     fileId,
 		Status: statuses[status],
-	})
-	if err != nil {
-		return fmt.Errorf("[o.UpdateFileStatus] query failed: %w", err)
+	}); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (o *Orm) FailUpload(fileId int64, errorMsg string) error {
-	err := o.queries.FailUpload(o.ctx, sqlc.FailUploadParams{
+	if err := o.queries.FailUpload(o.ctx, sqlc.FailUploadParams{
 		ID:        fileId,
 		LastError: sql.NullString{String: errorMsg, Valid: errorMsg != ""},
-	})
-	if err != nil {
-		return fmt.Errorf("[o.FailUpload] query failed: %w", err)
+	}); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (o *Orm) CompleteUpload(fileId int64, slug string) error {
-	err := o.queries.CompleteUpload(o.ctx, sqlc.CompleteUploadParams{
+	if err := o.queries.CompleteUpload(o.ctx, sqlc.CompleteUploadParams{
 		ID: fileId,
 		Slug: sql.NullString{
 			String: slug,
 			Valid:  slug != "",
 		},
-	})
-	if err != nil {
-		return fmt.Errorf("[o.CompleteUpload] query failed: %w", err)
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -169,26 +164,25 @@ func (o *Orm) CompleteUpload(fileId int64, slug string) error {
 func (o *Orm) AddUpload(fileId int64, status UploadStatus, hostName string, slug string, errorMsg string) error {
 	statuses := [...]string{"PENDING", "FAILED", "DONE"}
 	if status < UploadPending || status > UploadDone {
-		return fmt.Errorf("[o.AddUpload] invalid status")
+		return fmt.Errorf("cant add upload with invalid status")
 	}
 
-	err := o.queries.AddUpload(o.ctx, sqlc.AddUploadParams{
+	if err := o.queries.AddUpload(o.ctx, sqlc.AddUploadParams{
 		Status:    statuses[status],
 		FileID:    fileId,
 		HostName:  hostName,
 		Slug:      sql.NullString{String: slug, Valid: slug != ""},
 		LastError: sql.NullString{String: errorMsg, Valid: errorMsg != ""},
-	})
-	if err != nil {
-		return fmt.Errorf("[o.AddUpload] query failed: %w", err)
+	}); err != nil {
+		return err
 	}
+
 	return nil
 }
 
 func (o *Orm) ResetProcessingStatuses() error {
-	err := o.queries.ResetProcessingStatuses(o.ctx)
-	if err != nil {
-		return fmt.Errorf("[o.ResetProcessingStatuses] query failed: %w", err)
+	if err := o.queries.ResetProcessingStatuses(o.ctx); err != nil {
+		return err
 	}
 	return nil
 }
