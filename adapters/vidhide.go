@@ -96,7 +96,7 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 60 * time.Minute,
+		Timeout: 2 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
@@ -142,7 +142,7 @@ func (vh *Vidhide) getUploadServer() (string, error) {
 
 	ctx := context.Background()
 	client := &http.Client{
-		Timeout: 60 * time.Minute,
+		Timeout: 2 * time.Minute,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

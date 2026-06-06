@@ -31,7 +31,7 @@ var Adapters map[string]Adapter = map[string]Adapter{
 	"sendvid": &Sendvid{
 		apiKey: os.Getenv("SENDVID_KEY"),
 		client: &http.Client{
-			Timeout: 60 * time.Minute,
+			Timeout: 2 * time.Minute,
 			Jar:     jar,
 		},
 	},
