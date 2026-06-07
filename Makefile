@@ -11,6 +11,7 @@ build:
 
 # Build and safely deploy to the VPS
 deploy: build
-	ssh ultra "mkdir -p ~/scripts"
+	ssh ultra "mkdir -p ~/scripts && systemctl --user stop gouploader.service"
 	scp gouploader ultra:~/scripts
+	ssh ultra "systemctl --user start gouploader.service"
 	@echo "✅ Deployment successful! Binary copied to ~/scripts"
