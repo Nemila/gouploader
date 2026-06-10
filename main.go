@@ -221,7 +221,7 @@ func processFiles(ctx context.Context, orm *Orm) error {
 			fmt.Printf("⚠️  PARTIAL COMPLETION: Some uploads failed for File ID %d. Marked back to pending.\n", file.ID)
 		}
 
-		fmt.Printf("Waiting for 2 minutes before next upload.\n")
+		fmt.Printf("\n	Waiting for 2 minutes before next upload.\n")
 		time.Sleep(2 * time.Minute)
 	}
 

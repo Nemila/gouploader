@@ -90,6 +90,7 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 		return "", err
 	}
 	defer file.Close()
+	fileName := filepath.Base(file.Name())
 
 	go func() {
 		defer pw.Close()
@@ -100,7 +101,7 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 			return
 		}
 
-		part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+		part, err := writer.CreateFormFile("file", fileName)
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
@@ -150,6 +151,10 @@ func (vh *Vidhide) Upload(filePath string) (string, error) {
 	matches := re.FindStringSubmatch(string(html))
 	if len(matches) < 1 {
 		return "", fmt.Errorf("failed to extract slug")
+	}
+
+	if fileName == matches[1] {
+		return "", fmt.Errorf("failed to upload, session may have expired")
 	}
 
 	return matches[1], nil
