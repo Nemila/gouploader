@@ -23,7 +23,7 @@ import (
 )
 
 type importResponse struct {
-	Message string `json:"message"`
+	Msg string `json:"msg"`
 }
 
 func folderExists(path string) bool {
@@ -152,16 +152,36 @@ func processFiles(ctx context.Context, orm *Orm) error {
 
 			if uploadExists == nil {
 				fmt.Printf("  ⚡ [%s] Initiating fresh upload...\n", hostName)
+
+				existsOnWebsite, _ := checkFileExists(file.FilePath, hostName)
+				if existsOnWebsite {
+					_ = orm.AddUpload(file.ID, UploadDone, hostName, "EXISTS", "")
+					fmt.Printf("  ⏩ [%s] Already exist on website. Skipping.\n", hostName)
+					continue
+				}
+
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
+
 					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
+
 					fmt.Printf("  ❌ [%s] Upload Failed: %s\n", hostName, err.Error())
 					continue
 				}
+
 				fmt.Printf("  ✨ [%s] Complete! -> Slug: %s\n", hostName, slug)
+
 				_ = orm.AddUpload(file.ID, UploadDone, hostName, slug, "")
+
 				_ = importToWebsite(file.FilePath, hostName, slug)
+				continue
+			}
+
+			existsOnWebsite, _ := checkFileExists(file.FilePath, hostName)
+			if existsOnWebsite {
+				_ = orm.CompleteUpload(file.ID, "EXISTS")
+				fmt.Printf("  ⏩ [%s] Already exist on website. Skipping.\n", hostName)
 				continue
 			}
 
@@ -172,16 +192,23 @@ func processFiles(ctx context.Context, orm *Orm) error {
 
 			if uploadExists.Status == "FAILED" {
 				fmt.Printf("  🔄 [%s] Found previous failure. Retrying upload...\n", hostName)
+
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
+
 					_ = orm.FailUpload(file.ID, err.Error())
+
 					fmt.Printf("  ❌ [%s] Retry Failed: %s\n", hostName, err.Error())
 					continue
 				}
+
 				fmt.Printf("  ✨ [%s] Retry Complete! -> Slug: %s\n", hostName, slug)
+
 				_ = orm.CompleteUpload(file.ID, slug)
+
 				_ = importToWebsite(file.FilePath, hostName, slug)
+
 				continue
 			}
 		}
@@ -201,50 +228,99 @@ func processFiles(ctx context.Context, orm *Orm) error {
 	return nil
 }
 
+type checkFileExistsResponse struct {
+	Exists bool   `json:"exists"`
+	Msg    string `json:"msg"`
+}
+
+func checkFileExists(filePath, hostName string) (bool, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	fileName := filepath.Base(file.Name())
+
+	params := url.Values{}
+	params.Add("fileName", fileName)
+	params.Add("hostName", hostName)
+
+	parsedUrl, err := url.Parse("https://dessinanime.cc/api/import/check-host")
+	if err != nil {
+		return false, err
+	}
+
+	parsedUrl.RawQuery = params.Encode()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, parsedUrl.String(), nil)
+	if err != nil {
+		return false, err
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Minute,
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer res.Body.Close()
+
+	var data checkFileExistsResponse
+	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
+		return false, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("failed to check %s", data.Msg)
+	}
+
+	return data.Exists, nil
+}
+
 func importToWebsite(filePath, hostName, slug string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("[addToWebsite] failed to open file: %w", err)
+		return err
 	}
 	defer file.Close()
 	fileName := filepath.Base(file.Name())
 
-	baseUrl := "https://dessinanime.cc/api/import"
-	ctx := context.Background()
-	client := &http.Client{
-		Timeout: 2 * time.Minute,
-	}
-
-	parsedUrl, err := url.Parse(baseUrl)
+	parsedUrl, err := url.Parse("https://dessinanime.cc/api/import")
 	if err != nil {
-		return fmt.Errorf("[addToWebsite] failed to parse url: %w", err)
+		return err
 	}
 
 	params := url.Values{}
 	params.Add("fileName", fileName)
 	params.Add("hostName", hostName)
 	params.Add("slug", slug)
-
 	parsedUrl.RawQuery = params.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedUrl.String(), nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, parsedUrl.String(), nil)
 	if err != nil {
-		return fmt.Errorf("[addToWebsite] failed to create request: %w", err)
+		return err
 	}
 
+	client := &http.Client{
+		Timeout: 2 * time.Minute,
+	}
 	res, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("[addToWebsite] faied to execute request: %w", err)
+		return err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusOK {
-		var importRes importResponse
-		if err := json.NewDecoder(res.Body).Decode(&importRes); err != nil {
-			return fmt.Errorf("[addToWebsite] faied to decode json: %w", err)
-		}
-		fmt.Printf("  🌐 [API-Import] -> %s\n", importRes.Message)
+	var importRes importResponse
+	if err := json.NewDecoder(res.Body).Decode(&importRes); err != nil {
+		return err
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to import to website: %s", importRes.Msg)
+	}
+
+	fmt.Printf("  🌐 [API-Import] -> %s\n", importRes.Msg)
 	return nil
 }
