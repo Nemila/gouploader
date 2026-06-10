@@ -161,7 +161,7 @@ func processFiles(ctx context.Context, orm *Orm) error {
 					continue
 				}
 
-				actualUploadAttempted = true
+				updateUploadAttempt(hostName, &actualUploadAttempted)
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
@@ -190,7 +190,7 @@ func processFiles(ctx context.Context, orm *Orm) error {
 
 			if uploadExists.Status == "FAILED" {
 				fmt.Printf("  🔄 [%s] Found previous failure. Retrying upload...\n", hostName)
-				actualUploadAttempted = true
+				updateUploadAttempt(hostName, &actualUploadAttempted)
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
@@ -200,11 +200,8 @@ func processFiles(ctx context.Context, orm *Orm) error {
 				}
 
 				fmt.Printf("  ✨ [%s] Retry Complete! -> Slug: %s\n", hostName, slug)
-
 				_ = orm.CompleteUpload(file.ID, slug)
-
 				_ = importToWebsite(file.FilePath, hostName, slug)
-
 				continue
 			}
 		}
@@ -218,12 +215,23 @@ func processFiles(ctx context.Context, orm *Orm) error {
 		}
 
 		if actualUploadAttempted {
-			fmt.Printf("\n	⏰ Waiting for 2 minutes before next upload.\n")
+			fmt.Printf("\n⏰  Waiting for 2 minutes before next upload.\n")
 			time.Sleep(2 * time.Minute)
 		}
 	}
 
 	return nil
+}
+
+func updateUploadAttempt(hostName string, attempted *bool) {
+	ignoreWaitForAdapters := [...]string{"abyss"}
+	*attempted = true
+
+	for _, name := range ignoreWaitForAdapters {
+		if name == hostName {
+			*attempted = false
+		}
+	}
 }
 
 type checkFileExistsResponse struct {
