@@ -130,6 +130,7 @@ func processFiles(ctx context.Context, orm *Orm) error {
 		}
 
 		allHostsSuccessful := true
+		actualUploadAttempted := false
 
 		fmt.Println("\n──────────────────────────────────────────────────────────")
 		fmt.Printf("📦 PROCESSING FILE ID [%d]\n", file.ID)
@@ -160,20 +161,17 @@ func processFiles(ctx context.Context, orm *Orm) error {
 					continue
 				}
 
+				actualUploadAttempted = true
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
-
 					_ = orm.AddUpload(file.ID, UploadFailed, hostName, "", err.Error())
-
 					fmt.Printf("  ❌ [%s] Upload Failed: %s\n", hostName, err.Error())
 					continue
 				}
 
 				fmt.Printf("  ✨ [%s] Complete! -> Slug: %s\n", hostName, slug)
-
 				_ = orm.AddUpload(file.ID, UploadDone, hostName, slug, "")
-
 				_ = importToWebsite(file.FilePath, hostName, slug)
 				continue
 			}
@@ -192,13 +190,11 @@ func processFiles(ctx context.Context, orm *Orm) error {
 
 			if uploadExists.Status == "FAILED" {
 				fmt.Printf("  🔄 [%s] Found previous failure. Retrying upload...\n", hostName)
-
+				actualUploadAttempted = true
 				slug, err := adapter.Upload(file.FilePath)
 				if err != nil {
 					allHostsSuccessful = false
-
 					_ = orm.FailUpload(file.ID, err.Error())
-
 					fmt.Printf("  ❌ [%s] Retry Failed: %s\n", hostName, err.Error())
 					continue
 				}
@@ -221,8 +217,10 @@ func processFiles(ctx context.Context, orm *Orm) error {
 			fmt.Printf("⚠️  PARTIAL COMPLETION: Some uploads failed for File ID %d. Marked back to pending.\n", file.ID)
 		}
 
-		fmt.Printf("\n	Waiting for 2 minutes before next upload.\n")
-		time.Sleep(2 * time.Minute)
+		if actualUploadAttempted {
+			fmt.Printf("\n	⏰ Waiting for 2 minutes before next upload.\n")
+			time.Sleep(2 * time.Minute)
+		}
 	}
 
 	return nil
