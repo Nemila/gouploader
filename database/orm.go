@@ -38,7 +38,8 @@ const (
 func NewOrm() (*Orm, error) {
 	ctx := context.Background()
 
-	db, err := sql.Open("sqlite", "./database.db")
+	db, err := sql.Open("sqlite", "./database.db?_journal_mode=WAL&_busy_timeout=5000")
+	db.SetMaxOpenConns(1)
 	if err != nil {
 		return nil, err
 	}

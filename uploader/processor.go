@@ -10,7 +10,10 @@ import (
 	"gouploader/website"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const uploadCooldown = 2 * time.Minute
@@ -60,20 +63,28 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	hostNames := sortHostNames(adapters.Adapters)
 	allSuccessful := true
 	anyUploaded := false
+	var mu sync.Mutex
+
+	g, ctx := errgroup.WithContext(ctx)
 
 	for _, hostName := range hostNames {
-		if ctx.Err() != nil {
-			orm.UpdateFileStatus(file.ID, database.FilePending)
-			return ctx.Err()
-		}
+		g.Go(func() error {
+			uploaded, err := handleHost(orm, wc, file, hostName, uploads)
 
-		uploaded, err := handleHost(orm, wc, file, hostName, uploads)
-		if err != nil {
-			allSuccessful = false
-		}
-		if uploaded {
-			anyUploaded = true
-		}
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				allSuccessful = false
+			}
+			if uploaded {
+				anyUploaded = true
+			}
+			return nil
+		})
+
+	}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	if allSuccessful {
