@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -42,14 +42,19 @@ func NewOrm() (*Orm, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	queries := sqlc.New(db)
 
-	return &Orm{
+	o := &Orm{
 		ctx:     ctx,
 		db:      db,
 		queries: queries,
-	}, nil
+	}
+
+	if err := o.InitDatabase(); err != nil {
+		panic(err.Error())
+	}
+
+	return o, nil
 }
 
 func (o *Orm) InitDatabase() error {
@@ -66,7 +71,6 @@ func (o *Orm) InitDatabase() error {
 		if _, err := o.db.ExecContext(o.ctx, schema); err != nil {
 			return err
 		}
-
 		fmt.Println("✅ Database successfully initialized!")
 	}
 
