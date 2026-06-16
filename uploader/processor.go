@@ -78,13 +78,13 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 	for _, hostName := range hostNames {
 		func(hostName string) {
 			eg.Go(func() error {
-				uploaded, err := handleHost(log, egCtx, orm, wc, file, hostName, uploadJobs)
+				uploadAttempted, err := handleHost(log, egCtx, orm, wc, file, hostName, uploadJobs)
 				mu.Lock()
 				defer mu.Unlock()
 				if err != nil {
 					allSuccessful = false
 				}
-				if uploaded && hostName != "hydrax" {
+				if uploadAttempted && hostName != "hydrax" {
 					anyUploaded = true
 				}
 				return nil
@@ -130,7 +130,7 @@ func handleHost(
 	file sqlc.File,
 	hostName string,
 	existingUploads []sqlc.UploadJob,
-) (uploaded bool, err error) {
+) (uploadAttempted bool, err error) {
 	log = log.With("hostName", hostName)
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -188,7 +188,7 @@ func handleHost(
 		}
 
 		log.Error("Failed to upload file", "err", err)
-		return false, err
+		return true, err
 	}
 
 	if err := orm.Queries.UpsertUpload(ctx, sqlc.UpsertUploadParams{
