@@ -1,7 +1,6 @@
 package uploader
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 
@@ -10,11 +9,7 @@ import (
 
 const chatId = -1003702063699
 
-func UploadToChannel(token, endpoint, filePath string) (bool, error) {
-	bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(token, endpoint)
-	if err != nil {
-		return false, err
-	}
+func UploadToChannel(bot *tgbotapi.BotAPI, filePath string) (bool, error) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -22,14 +17,9 @@ func UploadToChannel(token, endpoint, filePath string) (bool, error) {
 	}
 	defer file.Close()
 
-	b, err := io.ReadAll(file)
-	if err != nil {
-		return false, err
-	}
-
-	video := tgbotapi.NewVideo(chatId, tgbotapi.FileBytes{
-		Bytes: b,
-		Name:  filepath.Base(file.Name()),
+	video := tgbotapi.NewVideo(chatId, tgbotapi.FileReader{
+		Name:   filepath.Base(file.Name()),
+		Reader: file,
 	})
 	video.Caption = filepath.Base(file.Name())
 	if _, err := bot.Send(video); err != nil {

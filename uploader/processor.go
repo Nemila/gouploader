@@ -61,7 +61,7 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	}
 
 	uploads, err := orm.Queries.GetFileUploads(ctx, file.ID)
-	if err != nil && !errors.Is(sql.ErrNoRows, err) {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		fmt.Printf("\tfailed to fetch uploads for file %d: %v\n", file.ID, err)
 		orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 			FilePath: file.FilePath,
@@ -74,11 +74,11 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	allSuccessful := true
 	anyUploaded := false
 	var mu sync.Mutex
-	g, groupCtx := errgroup.WithContext(ctx)
+	g, _ := errgroup.WithContext(ctx)
 
 	for _, hostName := range hostNames {
 		g.Go(func() error {
-			uploaded, err := handleHost(groupCtx, orm, wc, file, hostName, uploads)
+			uploaded, err := handleHost(ctx, orm, wc, file, hostName, uploads)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -112,7 +112,11 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 
 	if anyUploaded {
 		fmt.Printf("\twaiting %s before next file.\n", uploadCooldown)
-		time.Sleep(uploadCooldown)
+		select {
+		case <-time.After(uploadCooldown):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return nil

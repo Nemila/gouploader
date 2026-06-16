@@ -31,9 +31,6 @@ type sendvidUploadResponse struct {
 func (s *Sendvid) getContentLength(filePath, token string) (int64, error) {
 	buf := &bytes.Buffer{}
 	w := multipart.NewWriter(buf)
-	if err := w.Close(); err != nil {
-		return 0, err
-	}
 
 	if err := w.WriteField("authenticity_token", token); err != nil {
 		return 0, err
@@ -54,6 +51,7 @@ func (s *Sendvid) getContentLength(filePath, token string) (int64, error) {
 		return 0, nil
 	}
 
+	w.Close()
 	return int64(buf.Len()) + i.Size(), nil
 }
 

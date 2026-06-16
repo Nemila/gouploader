@@ -7,10 +7,12 @@ import (
 	"gouploader/database"
 	"gouploader/sqlc"
 	"os"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func CleanUp(cfg *config.Config, ctx context.Context, orm *database.Orm) error {
-	fmt.Println("cleaning up files")
+func CleanUp(bot *tgbotapi.BotAPI, cfg *config.Config, ctx context.Context, orm *database.Orm) error {
+	fmt.Println("Cleaning up files")
 
 	files, err := orm.Queries.GetFilesByStatus(ctx, "done")
 	if err != nil {
@@ -18,11 +20,13 @@ func CleanUp(cfg *config.Config, ctx context.Context, orm *database.Orm) error {
 	}
 
 	for _, file := range files {
-		uploaded, err := UploadToChannel(cfg.TgToken, cfg.TgEndpoint, file.FilePath)
+		fmt.Printf("\nUploading file to telegram: %s", file.FilePath)
+		uploaded, err := UploadToChannel(bot, file.FilePath)
 		if err != nil {
-			fmt.Printf("\nfailed to upload to channel: %s", err.Error())
-			return err
+			fmt.Printf("\nFailed to upload to telegram: %v", err)
+			continue
 		}
+
 		if uploaded {
 			orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 				FilePath: file.FilePath,

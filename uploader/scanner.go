@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"gouploader/database"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 )
 
+var fileNameRe = regexp.MustCompile(`(?i)^(.+?)-(tv|movie)-...`)
+
 func isValidName(fileName string) bool {
-	re := regexp.MustCompile(`(?i)^(.+?)-(tv|movie)-(\d+)-S(\d+)-E(\d+)(?:-(vf|vo|vostfr|multi))?(?:\.([^.]+))?$`)
-	return re.MatchString(fileName)
+	return fileNameRe.MatchString(fileName)
 }
 
 func ScanFolder(ctx context.Context, orm *database.Orm, path string) error {
@@ -25,7 +25,7 @@ func ScanFolder(ctx context.Context, orm *database.Orm, path string) error {
 
 	for _, filePath := range files {
 		if err := orm.Queries.InsertFile(ctx, filePath); err != nil {
-			panic(err.Error())
+			return err
 		}
 	}
 
@@ -36,16 +36,15 @@ func getDirFiles(path string) ([]string, error) {
 	files := []string{}
 
 	err := filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
-		if d.IsDir() {
-			return nil
-		}
-
-		file, err := os.Open(p)
 		if err != nil {
 			return nil
 		}
 
-		fileName := filepath.Base(file.Name())
+		if d.IsDir() {
+			return nil
+		}
+
+		fileName := filepath.Base(p)
 		if isValid := isValidName(fileName); !isValid {
 			return nil
 		}

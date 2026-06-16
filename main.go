@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,15 +12,13 @@ import (
 	"gouploader/database"
 	"gouploader/uploader"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	_ "modernc.org/sqlite"
 )
 
-type importResponse struct {
-	Msg string `json:"msg"`
-}
-
 func main() {
 	log := config.NewLogger()
+
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err.Error())
@@ -32,35 +29,45 @@ func main() {
 
 	orm, err := database.NewOrm(ctx)
 	if err != nil {
-		panic(err.Error())
+		log.Error("Failed to setup database", "err", err)
+		return
+	}
+
+	bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(cfg.TgToken, cfg.TgEndpoint)
+	if err != nil {
+		log.Error("Failed to setup telegram bot", "err", err)
+		return
 	}
 
 	go func() {
 		<-ctx.Done()
-		log.Warn("shutdown signal received, cleaning up database state")
+		log.Warn("Shut down, cleaning up database state")
 		if err := orm.Queries.ResetProcessingStatuses(context.Background()); err != nil {
-			log.Error("failed to clean up database state", "err", err)
+			log.Error("Failed to clean up database", "err", err)
 		} else {
-			log.Info("database successfully cleaned up")
+			log.Info("Database cleaned up")
 		}
-		os.Exit(0)
 	}()
 
 	for {
-
 		if err := uploader.ScanFolder(ctx, orm, cfg.MediaPath); err != nil {
-			panic(err.Error())
+			log.Error("Folder scan failed", "err", err)
 		}
 
 		if err := uploader.ProcessFiles(cfg, ctx, orm); err != nil {
-			panic(err.Error())
+			log.Error("Failed to process files", "err", err)
 		}
 
-		if err := uploader.CleanUp(cfg, ctx, orm); err != nil {
-			panic(err.Error())
+		if err := uploader.CleanUp(bot, cfg, ctx, orm); err != nil {
+			log.Error("Failed to clean up", "err", err)
 		}
 
-		fmt.Printf("\nGoing to sleep for 5 minutes: %s", time.Now().Add(time.Minute*5).Format("15:04:05"))
-		time.Sleep(time.Minute * 5)
+		log.Info("Going to sleep for 5 minutes", "time", time.Now().Add(time.Minute*5).Format("15:04:05"))
+
+		select {
+		case <-time.After(time.Minute * 5):
+		case <-ctx.Done():
+			return
+		}
 	}
 }

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,9 +26,6 @@ type Config struct {
 func folderExists(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false
-		}
 		return false
 	}
 

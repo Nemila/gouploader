@@ -17,7 +17,7 @@ type Orm struct {
 var schema string
 
 func NewOrm(ctx context.Context) (*Orm, error) {
-	db, err := sql.Open("sqlite", "./database.db?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", "./database.db?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func NewOrm(ctx context.Context) (*Orm, error) {
 		Queries: queries,
 	}
 	if err := o.InitDatabase(ctx); err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 
 	return o, nil
