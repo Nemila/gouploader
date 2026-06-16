@@ -7,6 +7,7 @@ import (
 	"gouploader/sqlc"
 	"log/slog"
 	"os"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -42,6 +43,12 @@ func CleanUp(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ctx con
 			if err := os.Remove(file.FilePath); err != nil {
 				log.Error("Failed to delete file", "err", err)
 			}
+		}
+
+		select {
+		case <-time.After(1 * time.Minute):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
