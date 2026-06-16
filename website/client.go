@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -60,25 +61,17 @@ func (c *Client) CheckFile(filePath, hostName string) (bool, error) {
 	if res.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("failed to check %s", data.Msg)
 	}
-
 	return data.Exists, nil
 }
 
-func (c *Client) ImportToWebsite(filePath, hostName, slug string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	fileName := filepath.Base(file.Name())
-
+func (c *Client) ImportToWebsite(log *slog.Logger, filePath, hostName, slug string) error {
 	parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/import", c.BaseUrl))
 	if err != nil {
 		return err
 	}
 
 	params := url.Values{}
-	params.Add("fileName", fileName)
+	params.Add("fileName", filepath.Base(filePath))
 	params.Add("hostName", hostName)
 	params.Add("slug", slug)
 	parsedUrl.RawQuery = params.Encode()
@@ -103,6 +96,6 @@ func (c *Client) ImportToWebsite(filePath, hostName, slug string) error {
 		return fmt.Errorf("failed to import to website: %s", data.Msg)
 	}
 
-	fmt.Printf("  🌐 [API-Import] -> %s\n", data.Msg)
+	log.Info("File imported", "data", data)
 	return nil
 }

@@ -2,37 +2,46 @@ package uploader
 
 import (
 	"context"
-	"fmt"
 	"gouploader/config"
 	"gouploader/database"
 	"gouploader/sqlc"
+	"log/slog"
 	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func CleanUp(bot *tgbotapi.BotAPI, cfg *config.Config, ctx context.Context, orm *database.Orm) error {
-	fmt.Println("Cleaning up files")
+func CleanUp(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ctx context.Context, orm *database.Orm) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	files, err := orm.Queries.GetFilesByStatus(ctx, "done")
 	if err != nil {
 		return err
 	}
+	log.Info("Cleaning up files", "found", len(files))
 
 	for _, file := range files {
-		fmt.Printf("\nUploading file to telegram: %s", file.FilePath)
-		uploaded, err := UploadToChannel(bot, file.FilePath)
+		log = log.With("filePath", file.FilePath)
+
+		uploaded, err := UploadToChannel(log, bot, file.FilePath)
 		if err != nil {
-			fmt.Printf("\nFailed to upload to telegram: %v", err)
+			log.Error("Failed to upload to telegram", "err", err)
 			continue
 		}
 
 		if uploaded {
-			orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+			if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 				FilePath: file.FilePath,
 				Status:   "saved",
-			})
-			os.Remove(file.FilePath)
+			}); err != nil {
+				log.Error("Failed to upsert file", "err", err)
+			}
+
+			if err := os.Remove(file.FilePath); err != nil {
+				log.Error("Failed to delete file", "err", err)
+			}
 		}
 	}
 

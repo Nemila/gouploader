@@ -28,7 +28,6 @@ func folderExists(path string) bool {
 	if err != nil {
 		return false
 	}
-
 	return info.IsDir()
 }
 
@@ -41,7 +40,7 @@ func Load() (*Config, error) {
 	}
 
 	if !folderExists(mediaPath) {
-		return nil, fmt.Errorf("❌ The folder %s does not exist (or is a file)", mediaPath)
+		return nil, fmt.Errorf("The folder %s does not exist (or is a file)", mediaPath)
 	}
 
 	tgToken := os.Getenv("TG_TOKEN")

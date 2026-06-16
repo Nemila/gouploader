@@ -1,6 +1,7 @@
 package uploader
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -9,7 +10,8 @@ import (
 
 const chatId = -1003702063699
 
-func UploadToChannel(bot *tgbotapi.BotAPI, filePath string) (bool, error) {
+func UploadToChannel(log *slog.Logger, bot *tgbotapi.BotAPI, filePath string) (bool, error) {
+	log.Info("Uploading file to telegram")
 
 	file, err := os.Open(filePath)
 	if err != nil {

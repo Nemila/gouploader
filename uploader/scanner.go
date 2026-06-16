@@ -2,54 +2,52 @@ package uploader
 
 import (
 	"context"
-	"fmt"
 	"gouploader/database"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 )
 
-var fileNameRe = regexp.MustCompile(`(?i)^(.+?)-(tv|movie)-...`)
+var fileNameRe = regexp.MustCompile(
+	`(?i)^(?P<name>.+?)-(?P<mediaType>tv|movie)-(?P<tmdbId>\d+)-S(?P<season>\d+)-E(?P<episode>\d+)(?:-(?P<lang>vf|vo|vostfr|multi))?(?:\.(?P<ext>[^.]+))?$`,
+)
 
-func isValidName(fileName string) bool {
-	return fileNameRe.MatchString(fileName)
-}
+func ScanFolder(log *slog.Logger, ctx context.Context, orm *database.Orm, path string) error {
+	log.Info("Scanning media folder", "folder", path)
 
-func ScanFolder(ctx context.Context, orm *database.Orm, path string) error {
-	fmt.Println("scanning media folder")
-
-	files, err := getDirFiles(path)
+	files, err := getDirFiles(log, path)
 	if err != nil {
 		return err
 	}
 
 	for _, filePath := range files {
 		if err := orm.Queries.InsertFile(ctx, filePath); err != nil {
-			return err
+			log.Error("Failed to insert file", "file", filePath)
+			continue
 		}
 	}
 
 	return nil
 }
 
-func getDirFiles(path string) ([]string, error) {
-	files := []string{}
+func getDirFiles(log *slog.Logger, path string) ([]string, error) {
+	filePaths := []string{}
 
-	err := filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(path, func(path string, dir fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 
-		if d.IsDir() {
+		if dir.IsDir() {
 			return nil
 		}
 
-		fileName := filepath.Base(p)
-		if isValid := isValidName(fileName); !isValid {
+		if isValid := fileNameRe.MatchString(filepath.Base(path)); !isValid {
 			return nil
 		}
 
-		files = append(files, p)
+		filePaths = append(filePaths, path)
 		return nil
 	})
 
@@ -57,5 +55,6 @@ func getDirFiles(path string) ([]string, error) {
 		return nil, err
 	}
 
-	return files, nil
+	log.Info("Done scanning", "found", len(filePaths))
+	return filePaths, nil
 }
