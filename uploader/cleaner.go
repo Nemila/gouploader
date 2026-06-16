@@ -7,7 +7,6 @@ import (
 	"gouploader/sqlc"
 	"log/slog"
 	"os"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -45,11 +44,6 @@ func CleanUp(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ctx con
 			}
 		}
 
-		select {
-		case <-time.After(1 * time.Minute):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
 	}
 
 	return nil
