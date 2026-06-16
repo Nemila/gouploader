@@ -207,7 +207,7 @@ func handleHost(
 		log.Error("Failed to upsert upload", "err", err)
 	}
 
-	log.Info("Complete! -> Slug", "slug", slug)
+	log.Info("Complete!", "slug", slug)
 
 	if err := wc.ImportToWebsite(log, file.FilePath, hostName, slug); err != nil {
 		log.Error("Failed to import to website", "err", err)
