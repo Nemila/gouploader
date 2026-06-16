@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -85,7 +86,9 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 					allSuccessful = false
 				}
 				if uploaded {
-					anyUploaded = true
+					if !slices.Contains([]string{"hydrax"}, hostName) {
+						anyUploaded = true
+					}
 				}
 				return nil
 			})
