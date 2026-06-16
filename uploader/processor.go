@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const uploadCooldown = 2 * time.Minute
+const uploadCooldown = 15 * time.Second
 
 func ProcessFiles(log *slog.Logger, cfg *config.Config, ctx context.Context, orm *database.Orm) error {
 	files, err := orm.Queries.GetFilesByStatus(ctx, "pending")

@@ -16,6 +16,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+var cooldownTime = 5 * time.Minute
+
 func main() {
 	log := config.NewLogger()
 
@@ -63,10 +65,10 @@ func main() {
 			log.Error("Failed to clean up", "err", err)
 		}
 
-		log.Info("Sleeping for 5 minutes", "time", time.Now().Add(time.Minute*5).Format("15:04:05"))
+		log.Info("Sleeping for 5 minutes", "time", time.Now().Add(cooldownTime).Format("15:04:05"))
 
 		select {
-		case <-time.After(time.Minute * 5):
+		case <-time.After(cooldownTime):
 		case <-ctx.Done():
 			return
 		}
