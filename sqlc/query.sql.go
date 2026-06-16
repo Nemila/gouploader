@@ -10,82 +10,6 @@ import (
 	"database/sql"
 )
 
-const addFile = `-- name: AddFile :exec
-INSERT INTO files (file_path) VALUES (?)
-`
-
-func (q *Queries) AddFile(ctx context.Context, filePath string) error {
-	_, err := q.db.ExecContext(ctx, addFile, filePath)
-	return err
-}
-
-const addUpload = `-- name: AddUpload :exec
-INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug) VALUES (?, ?, ?, ?, ?)
-`
-
-type AddUploadParams struct {
-	FileID    int64
-	HostName  string
-	Status    string
-	LastError sql.NullString
-	Slug      sql.NullString
-}
-
-func (q *Queries) AddUpload(ctx context.Context, arg AddUploadParams) error {
-	_, err := q.db.ExecContext(ctx, addUpload,
-		arg.FileID,
-		arg.HostName,
-		arg.Status,
-		arg.LastError,
-		arg.Slug,
-	)
-	return err
-}
-
-const completeUpload = `-- name: CompleteUpload :exec
-UPDATE upload_jobs SET status = "DONE", slug = ? WHERE id = ?
-`
-
-type CompleteUploadParams struct {
-	Slug sql.NullString
-	ID   int64
-}
-
-func (q *Queries) CompleteUpload(ctx context.Context, arg CompleteUploadParams) error {
-	_, err := q.db.ExecContext(ctx, completeUpload, arg.Slug, arg.ID)
-	return err
-}
-
-const failUpload = `-- name: FailUpload :exec
-UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?
-`
-
-type FailUploadParams struct {
-	LastError sql.NullString
-	ID        int64
-}
-
-func (q *Queries) FailUpload(ctx context.Context, arg FailUploadParams) error {
-	_, err := q.db.ExecContext(ctx, failUpload, arg.LastError, arg.ID)
-	return err
-}
-
-const findFileByPath = `-- name: FindFileByPath :one
-SELECT id, file_path, discovered_at, status FROM files WHERE file_path=? LIMIT 1
-`
-
-func (q *Queries) FindFileByPath(ctx context.Context, filePath string) (File, error) {
-	row := q.db.QueryRowContext(ctx, findFileByPath, filePath)
-	var i File
-	err := row.Scan(
-		&i.ID,
-		&i.FilePath,
-		&i.DiscoveredAt,
-		&i.Status,
-	)
-	return i, err
-}
-
 const getFileUploads = `-- name: GetFileUploads :many
 SELECT id, file_id, host_name, status, retry_count, last_error, slug FROM upload_jobs WHERE file_id=?
 `
@@ -121,18 +45,12 @@ func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob
 	return items, nil
 }
 
-const getPendingFile = `-- name: GetPendingFile :many
-SELECT id, file_path, discovered_at, status FROM files WHERE status = 'PENDING'
-ORDER BY id LIMIT ? OFFSET ?
+const getFilesByStatus = `-- name: GetFilesByStatus :many
+SELECT id, file_path, discovered_at, status FROM files WHERE status = ? ORDER BY id
 `
 
-type GetPendingFileParams struct {
-	Limit  int64
-	Offset int64
-}
-
-func (q *Queries) GetPendingFile(ctx context.Context, arg GetPendingFileParams) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, getPendingFile, arg.Limit, arg.Offset)
+func (q *Queries) GetFilesByStatus(ctx context.Context, status string) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, getFilesByStatus, status)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +77,17 @@ func (q *Queries) GetPendingFile(ctx context.Context, arg GetPendingFileParams) 
 	return items, nil
 }
 
+const insertFile = `-- name: InsertFile :exec
+INSERT OR IGNORE INTO files (file_path, status) VALUES (?, 'pending')
+`
+
+func (q *Queries) InsertFile(ctx context.Context, filePath string) error {
+	_, err := q.db.ExecContext(ctx, insertFile, filePath)
+	return err
+}
+
 const resetProcessingStatuses = `-- name: ResetProcessingStatuses :exec
-UPDATE files SET status = 'PENDING' WHERE status = 'PROCESSING'
+UPDATE files SET status = 'pending' WHERE status = 'processing'
 `
 
 func (q *Queries) ResetProcessingStatuses(ctx context.Context) error {
@@ -169,15 +96,61 @@ func (q *Queries) ResetProcessingStatuses(ctx context.Context) error {
 }
 
 const updateFileStatus = `-- name: UpdateFileStatus :exec
-UPDATE files SET status = ? WHERE id = ?
+UPDATE files SET status = ? WHERE file_path = ?
 `
 
 type UpdateFileStatusParams struct {
-	Status string
-	ID     int64
+	Status   string
+	FilePath string
 }
 
 func (q *Queries) UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateFileStatus, arg.Status, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateFileStatus, arg.Status, arg.FilePath)
+	return err
+}
+
+const upsertFile = `-- name: UpsertFile :exec
+INSERT INTO files (file_path, status) VALUES (?, ?) 
+ON CONFLICT (file_path) 
+DO UPDATE SET status = COALESCE(excluded.status, status)
+`
+
+type UpsertFileParams struct {
+	FilePath string
+	Status   string
+}
+
+func (q *Queries) UpsertFile(ctx context.Context, arg UpsertFileParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFile, arg.FilePath, arg.Status)
+	return err
+}
+
+const upsertUpload = `-- name: UpsertUpload :exec
+INSERT INTO upload_jobs (file_id, host_name, status, slug, last_error)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (file_id, host_name)
+DO UPDATE SET
+    status      = COALESCE(excluded.status, status),
+    slug        = COALESCE(excluded.slug, slug),
+    last_error  = COALESCE(excluded.last_error, last_error),
+    retry_count = retry_count + 1
+`
+
+type UpsertUploadParams struct {
+	FileID    int64
+	HostName  string
+	Status    string
+	Slug      sql.NullString
+	LastError sql.NullString
+}
+
+func (q *Queries) UpsertUpload(ctx context.Context, arg UpsertUploadParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUpload,
+		arg.FileID,
+		arg.HostName,
+		arg.Status,
+		arg.Slug,
+		arg.LastError,
+	)
 	return err
 }

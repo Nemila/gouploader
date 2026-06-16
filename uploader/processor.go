@@ -2,6 +2,8 @@ package uploader
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"gouploader/adapters"
 	"gouploader/config"
@@ -19,7 +21,9 @@ import (
 const uploadCooldown = 2 * time.Minute
 
 func ProcessFiles(cfg *config.Config, ctx context.Context, orm *database.Orm) error {
-	files, err := orm.GetPendingFiles(1, 999999999999999999)
+	fmt.Println("processing files")
+
+	files, err := orm.Queries.GetFilesByStatus(ctx, "pending")
 	if err != nil {
 		return err
 	}
@@ -49,14 +53,20 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	fmt.Printf("📄 Path: %s\n", file.FilePath)
 	fmt.Println("──────────────────────────────────────────────────────────")
 
-	if err := orm.UpdateFileStatus(file.ID, database.FileProcessing); err != nil {
-		fmt.Printf("  ⚠️  Could not mark file %d as processing: %v\n", file.ID, err)
+	if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+		FilePath: file.FilePath,
+		Status:   "processing",
+	}); err != nil {
+		fmt.Printf("\tfailed to upsert file %d: %v\n", file.ID, err)
 	}
 
-	uploads, err := orm.GetFileUploads(file.ID)
-	if err != nil {
-		fmt.Printf("  ❌ Could not fetch uploads for file %d: %v\n", file.ID, err)
-		orm.UpdateFileStatus(file.ID, database.FilePending)
+	uploads, err := orm.Queries.GetFileUploads(ctx, file.ID)
+	if err != nil && !errors.Is(sql.ErrNoRows, err) {
+		fmt.Printf("\tfailed to fetch uploads for file %d: %v\n", file.ID, err)
+		orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+			FilePath: file.FilePath,
+			Status:   "pending",
+		})
 		return nil
 	}
 
@@ -64,12 +74,11 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	allSuccessful := true
 	anyUploaded := false
 	var mu sync.Mutex
-
-	g, ctx := errgroup.WithContext(ctx)
+	g, groupCtx := errgroup.WithContext(ctx)
 
 	for _, hostName := range hostNames {
 		g.Go(func() error {
-			uploaded, err := handleHost(orm, wc, file, hostName, uploads)
+			uploaded, err := handleHost(groupCtx, orm, wc, file, hostName, uploads)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -88,61 +97,93 @@ func processFile(ctx context.Context, orm *database.Orm, wc *website.Client, fil
 	}
 
 	if allSuccessful {
-		orm.UpdateFileStatus(file.ID, database.FileDone)
-		fmt.Printf("✔️  File %d done across all hosts.\n", file.ID)
+		orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+			FilePath: file.FilePath,
+			Status:   "done",
+		})
+		fmt.Printf("\tfile uploaded across all hosts.\n")
 	} else {
-		orm.UpdateFileStatus(file.ID, database.FilePending)
-		fmt.Printf("⚠️  Some hosts failed for file %d — marked back to pending.\n", file.ID)
+		orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+			FilePath: file.FilePath,
+			Status:   "pending",
+		})
+		fmt.Printf("\tfile upload failed for some hosts.\n")
 	}
 
 	if anyUploaded {
-		fmt.Printf("⏰  Waiting %s before next file.\n", uploadCooldown)
+		fmt.Printf("\twaiting %s before next file.\n", uploadCooldown)
 		time.Sleep(uploadCooldown)
 	}
 
 	return nil
 }
 
-func handleHost(orm *database.Orm, wc *website.Client, file sqlc.File, hostName string, existingUploads []sqlc.UploadJob) (uploaded bool, err error) {
+func handleHost(ctx context.Context, orm *database.Orm, wc *website.Client, file sqlc.File, hostName string, existingUploads []sqlc.UploadJob) (uploaded bool, err error) {
 	uploadJob := findUploadJob(existingUploads, hostName)
 	adapter := adapters.Adapters[hostName]
 
-	if uploadJob != nil && uploadJob.Status == "DONE" {
-		fmt.Printf("  ⏩ [%s] Already uploaded previously. Skipping.\n", hostName)
+	if uploadJob != nil && uploadJob.Status == "done" {
+		fmt.Printf("\t[%s] already uploaded previously.\n", hostName)
 		return false, nil
 	}
 
-	existsOnWebsite, _ := wc.CheckFile(file.FilePath, hostName)
-	if existsOnWebsite {
-		if uploadJob != nil {
-			orm.CompleteUpload(file.ID, "EXISTS")
-		} else {
-			orm.AddUpload(file.ID, database.UploadDone, hostName, "EXISTS", "")
+	if existsOnWebsite, _ := wc.CheckFile(file.FilePath, hostName); existsOnWebsite {
+		err := orm.Queries.UpsertUpload(ctx, sqlc.UpsertUploadParams{
+			FileID:   file.ID,
+			HostName: hostName,
+			Status:   "done",
+			Slug: sql.NullString{
+				String: "",
+				Valid:  false,
+			},
+			LastError: sql.NullString{
+				String: "",
+				Valid:  false,
+			},
+		})
+		if err != nil {
+			fmt.Println(err)
 		}
-		fmt.Printf("  ⏩ [%s] Already exist on website. Skipping.\n", hostName)
+		fmt.Printf("\t[%s] already exist on website.\n", hostName)
 		return false, nil
 	}
 
-	fmt.Printf("  🔄 [%s] Uploading file\n", hostName)
+	fmt.Printf("\t[%s] uploading file %d\n", hostName, file.ID)
 
 	slug, err := adapter.Upload(file.FilePath)
 	if err != nil {
-		if uploadJob == nil {
-			orm.AddUpload(file.ID, database.UploadFailed, hostName, "", err.Error())
-		} else {
-			orm.FailUpload(file.ID, err.Error())
-		}
-		fmt.Printf("  ❌ [%s] Upload Failed: %s\n", hostName, err.Error())
+		orm.Queries.UpsertUpload(ctx, sqlc.UpsertUploadParams{
+			FileID:   file.ID,
+			HostName: hostName,
+			Status:   "failed",
+			LastError: sql.NullString{
+				String: err.Error(),
+				Valid:  true,
+			},
+			Slug: sql.NullString{
+				String: "",
+				Valid:  false,
+			},
+		})
+		fmt.Printf("\t[%s] upload failed: %s\n", hostName, err.Error())
 		return false, err
 	}
 
-	if uploadJob == nil {
-		_ = orm.AddUpload(file.ID, database.UploadDone, hostName, slug, "")
-	} else {
-		_ = orm.CompleteUpload(file.ID, slug)
-	}
+	orm.Queries.UpsertUpload(ctx, sqlc.UpsertUploadParams{
+		FileID:   file.ID,
+		HostName: hostName,
+		Status:   "done",
+		Slug: sql.NullString{
+			String: slug,
+			Valid:  true,
+		},
+		LastError: sql.NullString{
+			String: "",
+			Valid:  false,
+		},
+	})
 
-	fmt.Printf("  ✨ [%s] Complete! -> Slug: %s\n", hostName, slug)
+	fmt.Printf("\t[%s] Complete! -> Slug: %s\n", hostName, slug)
 	wc.ImportToWebsite(file.FilePath, hostName, slug)
 
 	return true, nil

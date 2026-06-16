@@ -1,27 +1,29 @@
--- name: GetPendingFile :many
-SELECT * FROM files WHERE status = 'PENDING'
-ORDER BY id LIMIT ? OFFSET ?;
+-- name: GetFilesByStatus :many
+SELECT * FROM files WHERE status = ? ORDER BY id;
 
--- name: AddFile :exec
-INSERT INTO files (file_path) VALUES (?);
+-- name: UpsertFile :exec
+INSERT INTO files (file_path, status) VALUES (?, ?) 
+ON CONFLICT (file_path) 
+DO UPDATE SET status = COALESCE(excluded.status, status);
 
--- name: AddUpload :exec
-INSERT INTO upload_jobs (file_id, host_name, status, last_error, slug) VALUES (?, ?, ?, ?, ?);
-
--- name: FindFileByPath :one
-SELECT * FROM files WHERE file_path=? LIMIT 1;
-
--- name: GetFileUploads :many
-SELECT * FROM upload_jobs WHERE file_id=?; 
+-- name: InsertFile :exec
+INSERT OR IGNORE INTO files (file_path, status) VALUES (?, 'pending');
 
 -- name: UpdateFileStatus :exec
-UPDATE files SET status = ? WHERE id = ?;
+UPDATE files SET status = ? WHERE file_path = ?;
 
--- name: FailUpload :exec
-UPDATE upload_jobs SET status = "FAILED", last_error = ? WHERE id = ?;
-
--- name: CompleteUpload :exec
-UPDATE upload_jobs SET status = "DONE", slug = ? WHERE id = ?;
+-- name: GetFileUploads :many
+SELECT * FROM upload_jobs WHERE file_id=?;
 
 -- name: ResetProcessingStatuses :exec
-UPDATE files SET status = 'PENDING' WHERE status = 'PROCESSING';
+UPDATE files SET status = 'pending' WHERE status = 'processing';
+
+-- name: UpsertUpload :exec
+INSERT INTO upload_jobs (file_id, host_name, status, slug, last_error)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (file_id, host_name)
+DO UPDATE SET
+    status      = COALESCE(excluded.status, status),
+    slug        = COALESCE(excluded.slug, slug),
+    last_error  = COALESCE(excluded.last_error, last_error),
+    retry_count = retry_count + 1;

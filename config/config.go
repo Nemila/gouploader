@@ -20,6 +20,8 @@ type Config struct {
 	UqloadSessId  string
 	SendvidKey    string
 	Env           string
+	TgToken       string
+	TgEndpoint    string
 }
 
 func folderExists(path string) bool {
@@ -44,6 +46,16 @@ func Load() (*Config, error) {
 
 	if !folderExists(mediaPath) {
 		return nil, fmt.Errorf("❌ The folder %s does not exist (or is a file)", mediaPath)
+	}
+
+	tgToken := os.Getenv("TG_TOKEN")
+	if tgToken == "" {
+		return nil, fmt.Errorf("TG_TOKEN is missing in env")
+	}
+
+	tgEndpoint := os.Getenv("TG_ENDPOINT")
+	if tgEndpoint == "" {
+		return nil, fmt.Errorf("TG_ENDPOINT is missing in env")
 	}
 
 	websiteUrl := os.Getenv("WEBSITE_URL")
@@ -100,6 +112,8 @@ func Load() (*Config, error) {
 		UqloadSessId:  uqloadSessId,
 		SendvidKey:    sendvidKey,
 		Env:           env,
+		TgToken:       tgToken,
+		TgEndpoint:    tgEndpoint,
 	}, nil
 }
 

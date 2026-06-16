@@ -1,22 +1,38 @@
 package uploader
 
 import (
+	"context"
 	"fmt"
+	"gouploader/database"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 )
 
-// const FILENAME_REGEX =
-//   ;
-
 func isValidName(fileName string) bool {
 	re := regexp.MustCompile(`(?i)^(.+?)-(tv|movie)-(\d+)-S(\d+)-E(\d+)(?:-(vf|vo|vostfr|multi))?(?:\.([^.]+))?$`)
 	return re.MatchString(fileName)
 }
 
-func GetDirFiles(path string) ([]string, error) {
+func ScanFolder(ctx context.Context, orm *database.Orm, path string) error {
+	fmt.Println("scanning media folder")
+
+	files, err := getDirFiles(path)
+	if err != nil {
+		return err
+	}
+
+	for _, filePath := range files {
+		if err := orm.Queries.InsertFile(ctx, filePath); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	return nil
+}
+
+func getDirFiles(path string) ([]string, error) {
 	files := []string{}
 
 	err := filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
@@ -39,7 +55,7 @@ func GetDirFiles(path string) ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("[getDirFiles] walk dir failed: %w", err)
+		return nil, err
 	}
 
 	return files, nil

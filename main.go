@@ -27,19 +27,18 @@ func main() {
 		panic(err.Error())
 	}
 
-	orm, err := database.NewOrm()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	orm, err := database.NewOrm(ctx)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
 		<-ctx.Done()
 		log.Warn("shutdown signal received, cleaning up database state")
-		err := orm.ResetProcessingStatuses()
-		if err != nil {
+		if err := orm.Queries.ResetProcessingStatuses(context.Background()); err != nil {
 			log.Error("failed to clean up database state", "err", err)
 		} else {
 			log.Info("database successfully cleaned up")
@@ -48,19 +47,16 @@ func main() {
 	}()
 
 	for {
-		files, err := uploader.GetDirFiles(cfg.MediaPath)
-		if err != nil {
+
+		if err := uploader.ScanFolder(ctx, orm, cfg.MediaPath); err != nil {
 			panic(err.Error())
 		}
 
-		for _, file := range files {
-			err := orm.RegisterFile(file)
-			if err != nil {
-				panic(err.Error())
-			}
+		if err := uploader.ProcessFiles(cfg, ctx, orm); err != nil {
+			panic(err.Error())
 		}
 
-		if err := uploader.ProcessFiles(cfg, ctx, orm); err != nil {
+		if err := uploader.CleanUp(cfg, ctx, orm); err != nil {
 			panic(err.Error())
 		}
 

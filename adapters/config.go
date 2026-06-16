@@ -17,13 +17,13 @@ var err error = godotenv.Load()
 var jar, _ = cookiejar.New(nil)
 
 var Adapters map[string]Adapter = map[string]Adapter{
-	"abyss": &Abyss{
-		apiKey: os.Getenv("ABYSS_KEY"),
-		client: &http.Client{
-			Timeout: 2 * time.Minute,
-			Jar:     jar,
-		},
-	},
+	// "abyss": &Abyss{
+	// 	apiKey: os.Getenv("ABYSS_KEY"),
+	// 	client: &http.Client{
+	// 		Timeout: 2 * time.Minute,
+	// 		Jar:     jar,
+	// 	},
+	// },
 	"uqload": &Uqload{
 		apiKey: os.Getenv("UQLOAD_KEY"),
 		sessId: os.Getenv("UQLOAD_SESSID"),
