@@ -209,7 +209,8 @@ func (s *Sendvid) Upload(filePath string) (string, error) {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("unexpected status: %s", res.Status)
+		body, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("%s:%s", res.Status, body)
 	}
 
 	var data sendvidUploadResponse

@@ -68,7 +68,7 @@ func (a *Abyss) Upload(filePath string) (string, error) {
 	}
 
 	if !data.Status || len(data.Slug) < 1 {
-		return "", fmt.Errorf("abyss upload failed %s", data.Slug)
+		return "", fmt.Errorf("abyss upload failed %v", data)
 	}
 
 	return data.Slug, nil

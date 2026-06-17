@@ -2,9 +2,11 @@ package uploader
 
 import (
 	"context"
+	"errors"
 	"gouploader/config"
 	"gouploader/database"
 	"gouploader/sqlc"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -40,11 +42,19 @@ func CleanUp(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ctx con
 			}
 
 			if err := os.Remove(file.FilePath); err != nil {
-				log.Error("Failed to delete file", "err", err)
+				if errors.Is(err, fs.ErrNotExist) {
+					log.Info("File doesn't exists (probably already sent)")
+					if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
+						FilePath: file.FilePath,
+						Status:   "saved",
+					}); err != nil {
+						log.Error("Failed to upsert file", "err", err)
+					}
+				} else {
+					log.Error("Failed to delete file", "err", err)
+				}
 			}
 		}
-
 	}
-
 	return nil
 }
