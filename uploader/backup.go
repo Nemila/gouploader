@@ -19,12 +19,12 @@ func UploadToChannel(log *slog.Logger, bot *tgbotapi.BotAPI, filePath string) (b
 	}
 	defer file.Close()
 
-	video := tgbotapi.NewVideo(chatId, tgbotapi.FileReader{
+	doc := tgbotapi.NewDocument(chatId, tgbotapi.FileReader{
 		Name:   filepath.Base(file.Name()),
 		Reader: file,
 	})
-	video.Caption = filepath.Base(file.Name())
-	if _, err := bot.Send(video); err != nil {
+	doc.Caption = filepath.Base(file.Name())
+	if _, err := bot.Send(doc); err != nil {
 		return false, err
 	}
 

@@ -53,7 +53,7 @@ func main() {
 	}()
 
 	for {
-		if err := uploader.ScanFolder(log, ctx, orm, cfg.MediaPath); err != nil {
+		if err := uploader.ScanFolder(log, ctx, orm, []string{cfg.MediaPath, "/home/nemila/uploaders"}); err != nil {
 			log.Error("Folder scan failed", "err", err)
 		}
 
