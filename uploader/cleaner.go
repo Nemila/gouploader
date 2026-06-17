@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -87,6 +88,12 @@ func ArchiveFiles(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ct
 			}); err != nil {
 				log.Error("Failed to upsert file", "err", err)
 			}
+		}
+
+		select {
+		case <-time.After(15 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
