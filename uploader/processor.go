@@ -53,6 +53,7 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 	if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 		FilePath: file.FilePath,
 		Status:   "processing",
+		Archived: file.Archived,
 	}); err != nil {
 		log.Error("Failed to upsert file", "err", err)
 	}
@@ -63,6 +64,7 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 		if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 			FilePath: file.FilePath,
 			Status:   "pending",
+			Archived: file.Archived,
 		}); err != nil {
 			log.Error("Failed to upsert file", "err", err)
 		}
@@ -97,6 +99,7 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 		if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 			FilePath: file.FilePath,
 			Status:   "done",
+			Archived: file.Archived,
 		}); err != nil {
 			log.Error("Failed to upsert file.")
 		}
@@ -105,6 +108,7 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 		if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
 			FilePath: file.FilePath,
 			Status:   "pending",
+			Archived: file.Archived,
 		}); err != nil {
 			log.Error("Failed to upsert file.")
 		}

@@ -46,7 +46,7 @@ func (q *Queries) GetFileUploads(ctx context.Context, fileID int64) ([]UploadJob
 }
 
 const getFilesByStatus = `-- name: GetFilesByStatus :many
-SELECT id, file_path, discovered_at, status FROM files WHERE status = ? ORDER BY id
+SELECT id, file_path, discovered_at, archived, status FROM files WHERE status = ? ORDER BY id
 `
 
 func (q *Queries) GetFilesByStatus(ctx context.Context, status string) ([]File, error) {
@@ -62,6 +62,40 @@ func (q *Queries) GetFilesByStatus(ctx context.Context, status string) ([]File, 
 			&i.ID,
 			&i.FilePath,
 			&i.DiscoveredAt,
+			&i.Archived,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUnArchivedFiles = `-- name: GetUnArchivedFiles :many
+SELECT id, file_path, discovered_at, archived, status FROM files WHERE archived = FALSE
+`
+
+func (q *Queries) GetUnArchivedFiles(ctx context.Context) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, getUnArchivedFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.DiscoveredAt,
+			&i.Archived,
 			&i.Status,
 		); err != nil {
 			return nil, err
@@ -110,18 +144,21 @@ func (q *Queries) UpdateFileStatus(ctx context.Context, arg UpdateFileStatusPara
 }
 
 const upsertFile = `-- name: UpsertFile :exec
-INSERT INTO files (file_path, status) VALUES (?, ?) 
+INSERT INTO files (file_path, status, archived) VALUES (?, ?, ?) 
 ON CONFLICT (file_path) 
-DO UPDATE SET status = COALESCE(excluded.status, status)
+DO UPDATE SET 
+    status = COALESCE(excluded.status, status),
+    archived = COALESCE(excluded.archived, archived)
 `
 
 type UpsertFileParams struct {
 	FilePath string
 	Status   string
+	Archived bool
 }
 
 func (q *Queries) UpsertFile(ctx context.Context, arg UpsertFileParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFile, arg.FilePath, arg.Status)
+	_, err := q.db.ExecContext(ctx, upsertFile, arg.FilePath, arg.Status, arg.Archived)
 	return err
 }
 

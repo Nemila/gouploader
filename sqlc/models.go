@@ -13,6 +13,7 @@ type File struct {
 	ID           int64
 	FilePath     string
 	DiscoveredAt time.Time
+	Archived     bool
 	Status       string
 }
 

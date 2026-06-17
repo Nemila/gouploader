@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
+	"unicode/utf8"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 type Uqload struct {
@@ -142,20 +144,20 @@ func (u *Uqload) Upload(filePath string) (string, error) {
 		return "", fmt.Errorf("uqload upload failed %s", res.Status)
 	}
 
-	html, err := io.ReadAll(res.Body)
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return "", err
 	}
+	slug := doc.Find(`[name="fn"]`).Text()
 
-	re := regexp.MustCompile(`name="fn">([^<]+)`)
-	matches := re.FindStringSubmatch(string(html))
-	if len(matches) < 1 {
-		return "", fmt.Errorf("failed to extract slug")
+	if fileName == slug || utf8.RuneCountInString(slug) < 1 {
+		// htmlContent, err := doc.Html()
+		// if err != nil {
+		// 	return "", err
+		// }
+		msg := doc.Find(`[name="st"]`).Text()
+		return "", fmt.Errorf("failed to upload or extract slug %s", msg)
 	}
 
-	if fileName == matches[1] {
-		return "", fmt.Errorf("failed to upload, session may have expired")
-	}
-
-	return matches[1], nil
+	return slug, nil
 }

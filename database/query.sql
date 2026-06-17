@@ -1,10 +1,15 @@
 -- name: GetFilesByStatus :many
 SELECT * FROM files WHERE status = ? ORDER BY id;
 
+-- name: GetUnArchivedFiles :many
+SELECT * FROM files WHERE archived = FALSE;
+
 -- name: UpsertFile :exec
-INSERT INTO files (file_path, status) VALUES (?, ?) 
+INSERT INTO files (file_path, status, archived) VALUES (?, ?, ?) 
 ON CONFLICT (file_path) 
-DO UPDATE SET status = COALESCE(excluded.status, status);
+DO UPDATE SET 
+    status = COALESCE(excluded.status, status),
+    archived = COALESCE(excluded.archived, archived);
 
 -- name: InsertFile :exec
 INSERT OR IGNORE INTO files (file_path, status) VALUES (?, 'pending');

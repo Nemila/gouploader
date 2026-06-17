@@ -61,6 +61,10 @@ func main() {
 			log.Error("Failed to process files", "err", err)
 		}
 
+		if err := uploader.ArchiveFiles(log, bot, cfg, ctx, orm); err != nil {
+			log.Error("Failed to archive files", "err", err)
+		}
+
 		if err := uploader.CleanUp(log, bot, cfg, ctx, orm); err != nil {
 			log.Error("Failed to clean up", "err", err)
 		}
