@@ -26,7 +26,7 @@ func CleanUp(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ctx con
 	log.Info("Cleaning up files", "found", len(files))
 
 	for _, file := range files {
-		log = log.With("fileName", filepath.Base(file.FilePath))
+		log := log.With("fileName", filepath.Base(file.FilePath))
 
 		if !file.Archived {
 			log.Info("Skipping file, not archived yet")
@@ -60,7 +60,7 @@ func ArchiveFiles(log *slog.Logger, bot *tgbotapi.BotAPI, cfg *config.Config, ct
 	log.Info("Archiving files", "found", len(unArchivedFiles))
 
 	for _, unArchivedFile := range unArchivedFiles {
-		log = log.With("fileName", filepath.Base(unArchivedFile.FilePath))
+		log := log.With("fileName", filepath.Base(unArchivedFile.FilePath))
 
 		uploaded, err := UploadToChannel(log, bot, unArchivedFile.FilePath)
 		if err != nil {

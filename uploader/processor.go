@@ -36,6 +36,7 @@ func ProcessFiles(log *slog.Logger, cfg *config.Config, ctx context.Context, orm
 	}
 
 	for _, file := range files {
+		log := log.With("fileName", filepath.Base(file.FilePath))
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -47,7 +48,6 @@ func ProcessFiles(log *slog.Logger, cfg *config.Config, ctx context.Context, orm
 }
 
 func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *website.Client, file sqlc.File) error {
-	log = log.With("fileName", filepath.Base(file.FilePath))
 	log.Info("Processing file")
 
 	if err := orm.Queries.UpsertFile(ctx, sqlc.UpsertFileParams{
@@ -80,7 +80,9 @@ func processFile(log *slog.Logger, ctx context.Context, orm *database.Orm, wc *w
 	for _, hostName := range hostNames {
 		func(hostName string) {
 			eg.Go(func() error {
+				log := log.With("hostName", hostName)
 				uploadAttempted, err := handleHost(log, egCtx, orm, wc, file, hostName, uploadJobs)
+
 				mu.Lock()
 				defer mu.Unlock()
 				if err != nil {
@@ -135,7 +137,6 @@ func handleHost(
 	hostName string,
 	existingUploads []sqlc.UploadJob,
 ) (uploadAttempted bool, err error) {
-	log = log.With("hostName", hostName)
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
