@@ -1,6 +1,3 @@
-CREATE INDEX idx_files_status ON files(status);
-CREATE INDEX idx_upload_jobs_file_id ON upload_jobs(file_id);
-
 CREATE TABLE files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT UNIQUE NOT NULL,
@@ -19,3 +16,6 @@ CREATE TABLE upload_jobs (
     slug TEXT,
     UNIQUE(file_id, host_name)
 );
+
+CREATE INDEX idx_files_status ON files(status);
+CREATE INDEX idx_upload_jobs_file_id ON upload_jobs(file_id);
