@@ -8,7 +8,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const chatId = -1003702063699
+const chatId = -1003891110576
 
 func UploadToChannel(log *slog.Logger, bot *tgbotapi.BotAPI, filePath string) (bool, error) {
 	log.Info("Uploading file to telegram")
