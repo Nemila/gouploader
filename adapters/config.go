@@ -16,11 +16,13 @@ type Adapter interface {
 var err error = godotenv.Load()
 var jar, _ = cookiejar.New(nil)
 
+const uploadTimeout = 30 * time.Minute
+
 var Adapters map[string]Adapter = map[string]Adapter{
 	"hydrax": &Abyss{
 		apiKey: os.Getenv("ABYSS_KEY"),
 		client: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: uploadTimeout,
 			Jar:     jar,
 		},
 	},
@@ -28,7 +30,7 @@ var Adapters map[string]Adapter = map[string]Adapter{
 		apiKey: os.Getenv("UQLOAD_KEY"),
 		sessId: os.Getenv("UQLOAD_SESSID"),
 		client: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: uploadTimeout,
 			Jar:     jar,
 		},
 	},
@@ -36,14 +38,14 @@ var Adapters map[string]Adapter = map[string]Adapter{
 		apiKey: os.Getenv("VIDHIDE_KEY"),
 		sessId: os.Getenv("VIDHIDE_SESSID"),
 		client: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: uploadTimeout,
 			Jar:     jar,
 		},
 	},
 	"sendvid": &Sendvid{
 		apiKey: os.Getenv("SENDVID_KEY"),
 		client: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: uploadTimeout,
 			Jar:     jar,
 		},
 	},
