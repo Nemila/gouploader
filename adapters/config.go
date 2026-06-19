@@ -16,7 +16,7 @@ type Adapter interface {
 var err error = godotenv.Load()
 var jar, _ = cookiejar.New(nil)
 
-const uploadTimeout = 30 * time.Minute
+const uploadTimeout = 2 * time.Minute
 
 var Adapters map[string]Adapter = map[string]Adapter{
 	"hydrax": &Abyss{
